@@ -1,6 +1,6 @@
 # Contrato de bytes de SoloLoJusto
 
-Fuente de verdad para la API (Go), el firmware (micro-ecc) y las PWAs (WebCrypto).
+Fuente de verdad para la API (Go), el firmware del lector (ESP32 con micro-ecc) y las PWAs (WebCrypto). Los enlaces entre lector, gateway, PIC y API están en [`contrato-terminal.md`](contrato-terminal.md).
 Cualquier cambio se anuncia al equipo antes de hacerlo. Implementación de referencia:
 `api/internal/sign`; vectores: `docs/test-vectors.json`; verificador independiente: `node tools/verify.mjs`.
 
@@ -88,8 +88,8 @@ Ventana de ±30 s respecto de la hora del verificador.
 - **attributes**: handle, código, emisor, valor, vencimiento; único por (handle, código).
 - **devices**: ciudadano, handle, clave pública del celular (BYTEA 33 B).
 - **wallet_credentials**: dispositivo, handle, código, blob, vencimiento.
-- **terminals**: nombre, rol (`comercio`/`registro`/`salud`/`transito`/`emergencia`), atributo que pide, hash del token.
-- **events**: handle, terminal, atributo, resultado (1–6), `emergency` (bool), hora. Retención de 30 días.
+- **terminals**: nombre, rol (`comercio`/`registro`/`salud`/`transito`/`emergencia`), atributo que pide, `modo` (`verificar`/`emergencia`/`emitir`/`vincular`), hash del token.
+- **events**: `kind` (`verif`/`tamper`), handle, terminal, atributo, resultado (1–6), `emergency` (bool), hora. Handle, atributo y resultado son nulos en `tamper`. Retención de 30 días.
 - **link_codes**: código de 6 dígitos, handle, vencimiento.
 
 ## Nota para P4 (WebCrypto)
