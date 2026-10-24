@@ -4,6 +4,21 @@
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
+  --animate-event-in: event-in 0.8s ease-out;
+
+  @keyframes event-in {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+      background-color: var(--color-primary-100);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      background-color: transparent;
+    }
+  }
+
   /* Primario: azul profundo */
   --color-primary-50: #eef4ff;
   --color-primary-100: #dce8ff;

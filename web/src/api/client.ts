@@ -1,6 +1,6 @@
 export const UNAUTHORIZED_EVENT = 'sisa:unauthorized'
 
-const API_BASE = '/api'
+export const API_BASE = '/api'
 
 export class ApiError extends Error {
   readonly status: number

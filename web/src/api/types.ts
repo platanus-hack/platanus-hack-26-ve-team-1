@@ -35,15 +35,23 @@ export type CardInfo = {
   atributos: Attribute[]
 }
 
-export type VerificationResult = 'aprobado' | 'denegado'
+/** Código de resultado del backend (1–6); ver RESULT_INFO en lib/events.ts. */
+export type EventResult = 1 | 2 | 3 | 4 | 5 | 6
 
+/** Código de atributo del backend (1–6); ver EVENT_ATTRIBUTE_LABELS en lib/events.ts. */
+export type EventAttribute = 1 | 2 | 3 | 4 | 5 | 6
+
+/** Evento ya normalizado (ver normalizeEvent en lib/events.ts). */
 export type EventItem = {
-  id: string
+  id: number
   local: string
-  atributo: Attribute
-  resultado: VerificationResult
-  /** Fecha y hora en formato ISO 8601. */
+  /** null si el backend envió un código no válido. */
+  atributo: EventAttribute | null
+  /** null si el backend envió un código no válido. */
+  resultado: EventResult | null
+  /** Fecha y hora en formato ISO 8601; vacío si no vino o no es válida. */
   hora: string
+  /** true en accesos de emergencia (no es un código de resultado). */
   emergencia: boolean
 }
 

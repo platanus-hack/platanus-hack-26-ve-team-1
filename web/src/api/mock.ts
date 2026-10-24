@@ -3,7 +3,6 @@ import type {
   Attribute,
   CardInfo,
   Citizen,
-  EventItem,
   LoginInput,
   OptionalData,
   RegisterInput,
@@ -112,24 +111,71 @@ export const mockCitizens: Citizen[] = demoAccounts
     cedula: mockCards[id]?.estado ?? 'revocada',
   }))
 
-export const mockEvents: EventItem[] = [
-  {
-    id: 'e-1',
-    local: 'Bar El Faro',
-    atributo: 'mayor_de_18',
-    resultado: 'aprobado',
-    hora: '2026-10-23T22:15:00Z',
-    emergencia: false,
-  },
-  {
-    id: 'e-2',
-    local: 'Botillería Central',
-    atributo: 'mayor_de_18',
-    resultado: 'denegado',
-    hora: '2026-10-24T01:40:00Z',
-    emergencia: false,
-  },
+// Formato del backend: id numérico, atributo "A1"–"A6", resultado 1–6, emergencia booleana.
+type MockBackendEvent = {
+  id: number
+  local: string
+  atributo: string
+  resultado: number
+  hora: string
+  emergencia: boolean
+}
+
+function backendEvent(
+  id: number,
+  local: string,
+  atributo: string,
+  resultado: number,
+  hora: string,
+  emergencia = false,
+): MockBackendEvent {
+  return { id, local, atributo, resultado, hora, emergencia }
+}
+
+// Del más reciente al más antiguo, como responde el backend.
+const mockEventsByUser: Record<string, MockBackendEvent[]> = {
+  'u-ana': [
+    backendEvent(104, 'Botillería Central', 'A2', 6, '2026-10-24T10:20:00Z'),
+    backendEvent(103, 'Hotel Costanera', 'A3', 4, '2026-10-24T09:30:00Z'),
+    backendEvent(102, 'Bar El Faro', 'A1', 1, '2026-10-23T22:15:00Z'),
+    backendEvent(101, 'Hospital Central', 'A4', 1, '2026-10-22T14:05:00Z', true),
+  ],
+  'u-luis': [
+    backendEvent(202, 'Banco Andes', 'A3', 5, '2026-10-24T11:10:00Z'),
+    backendEvent(201, 'Botillería Central', 'A1', 5, '2026-10-24T01:40:00Z'),
+  ],
+  'u-maria': [backendEvent(301, 'Supermercado Norte', 'A1', 3, '2026-10-23T18:20:00Z')],
+}
+
+const MOCK_PLACES = [
+  'Bar El Faro',
+  'Botillería Central',
+  'Hotel Costanera',
+  'Banco Andes',
+  'Farmacia Sur',
+  'Estación de Metro',
 ]
+
+// Atributos que lee un comercio: A1 Mayor de 18, A2 Mayor de 21, A3 Identidad.
+const MOCK_COMMERCE_ATTRIBUTES = ['A1', 'A2', 'A3'] as const
+
+let nextMockEventId = 1000
+
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]
+}
+
+function randomMockEvent(userId: string): MockBackendEvent {
+  const id = nextMockEventId++
+  const hora = new Date().toISOString()
+  // Ana recibe a veces una lectura de emergencia; los demás reflejan el estado de su cédula.
+  if (userId === 'u-ana' && Math.random() < 0.2) {
+    return backendEvent(id, 'Hospital Central', 'A4', 1, hora, true)
+  }
+  const resultado =
+    userId === 'u-ana' ? 1 : userId === 'u-luis' ? 5 : userId === 'u-maria' ? 3 : 2
+  return backendEvent(id, pick(MOCK_PLACES), pick(MOCK_COMMERCE_ATTRIBUTES), resultado, hora)
+}
 
 export const mockTerminals: Terminal[] = [
   {
@@ -278,4 +324,40 @@ export async function mockSaveOptionalData(data: OptionalData): Promise<Optional
   const user = requireSessionUser()
   sessionStorage.setItem(optionalDataKey(user.id), JSON.stringify(data))
   return data
+}
+
+/** Respuesta de GET /api/events: { ok, events }, del más reciente al más antiguo. */
+export async function mockGetEvents(): Promise<{ ok: true; events: MockBackendEvent[] }> {
+  await delay()
+  const user = requireSessionUser()
+  return { ok: true, events: mockEventsByUser[user.id] ?? [] }
+}
+
+const MOCK_STREAM_MIN_MS = 4000
+const MOCK_STREAM_JITTER_MS = 3000
+
+/**
+ * Simula el stream SSE: abre tras un instante y entrega cada evento nuevo como el `data`
+ * (texto JSON) del evento "evento", igual que el EventSource real.
+ */
+export function mockOpenEventStream(handlers: {
+  onOpen: () => void
+  onMessage: (data: string) => void
+}): () => void {
+  const user = findUserById(sessionStorage.getItem(SESSION_KEY))
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const schedule = () => {
+    timer = setTimeout(() => {
+      if (user) handlers.onMessage(JSON.stringify(randomMockEvent(user.id)))
+      schedule()
+    }, MOCK_STREAM_MIN_MS + Math.random() * MOCK_STREAM_JITTER_MS)
+  }
+
+  timer = setTimeout(() => {
+    handlers.onOpen()
+    schedule()
+  }, 400)
+
+  return () => clearTimeout(timer)
 }
