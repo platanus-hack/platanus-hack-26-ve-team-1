@@ -74,7 +74,7 @@ Inventario de placas: 2 × ESP32, 1 × Arduino UNO, 1 × Arduino Mega. Rol de ca
 | Shield TFT (bus paralelo 8 bits) | D2–D9 y A0–A4 (D10–D13: lector SD del shield) |
 | USB (programación / pruebas) | COM8 |
 
-Para cargar firmware hay que desconectar el cable del pin 0. Mensajes: [`docs/contrato.md`](../../../docs/contrato.md), sección 3.
+Para cargar firmware hay que desconectar el cable del pin 0. Mensajes: [`docs/contrato-terminal.md`](../../../docs/contrato-terminal.md), sección 3.
 
 ## Alimentación
 

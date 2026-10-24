@@ -7,7 +7,7 @@
  * Pantalla del comercio.
  *
  * Recibe del lector una línea JSON por Serial (pin 0, 9600 baudios) y muestra
- * el resultado. Mensajes: docs/contrato.md, sección 3.
+ * el resultado. Mensajes: docs/contrato-terminal.md, sección 3.
  * Para probar sin el lector: monitor serie de PlatformIO y escribir el JSON.
  * Para subir firmware: desconectar el cable del pin 0.
  *
