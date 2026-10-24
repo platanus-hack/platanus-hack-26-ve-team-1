@@ -1,4 +1,6 @@
-export type Role = 'ciudadano' | 'emisor' | 'comercio'
+import type { Role } from '../api/types'
+
+export type { Role }
 
 export type NavItem = {
   to: string
