@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ApiError } from '../api/client'
 import type { CardInfo } from '../api/types'
 import { AttributeIcon } from '../components/AttributeIcon'
+import { OptionalDataForm } from '../components/OptionalDataForm'
 import { PageTitle } from '../components/PageTitle'
 import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
@@ -140,6 +141,8 @@ export default function HomePage() {
           </section>
         </>
       )}
+
+      <OptionalDataForm />
     </div>
   )
 }

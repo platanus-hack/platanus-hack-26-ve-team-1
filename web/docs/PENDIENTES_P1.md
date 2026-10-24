@@ -11,8 +11,25 @@ Endpoints y formas JSON que el frontend de sIsA necesita y que **no están en el
 | `GET` | `/api/me` | Restaurar la sesión al cargar la app. | `200` con un `User`; `401` si no hay sesión. |
 | `POST` | `/api/auth/logout` | Cerrar sesión (el backend debe borrar la cookie). | `204` sin cuerpo, o `200`. |
 | `GET` | `/api/card` | Cédula del usuario autenticado (portal ciudadano). Ruta en `CARD_ENDPOINTS` (`api/card.ts`). | `200` con un `CardInfo`; `404` si aún no tiene cédula. |
+| `GET` | `/api/me/optional-data` | Precargar el formulario "Mis datos opcionales". Ruta en `OPTIONAL_DATA_ENDPOINTS` (`api/optionalData.ts`). | `200` con un `OptionalData` (valores vacíos si no hay datos guardados). |
 
-Ya están en el contrato: `POST /api/auth/register` y `POST /api/auth/login` (ambos responden con un `User`).
+Ya están en el contrato: `POST /api/auth/register`, `POST /api/auth/login` (ambos responden con un `User`) y `PUT /api/me/optional-data` (recibe y devuelve un `OptionalData`).
+
+## Forma JSON de `OptionalData`
+
+```json
+{
+  "tipoSangre": "O+",
+  "alergias": "penicilina, maní",
+  "contactoEmergencia": { "nombre": "Rosa Pérez", "telefono": "+56912345678" },
+  "donante": true
+}
+```
+
+- `tipoSangre`: `"A+"`, `"A-"`, `"B+"`, `"B-"`, `"AB+"`, `"AB-"`, `"O+"`, `"O-"` o `null`.
+- `alergias`: string de hasta 200 caracteres (puede ser vacío).
+- `contactoEmergencia.telefono`: formato internacional sin espacios (`+` y 8 a 15 dígitos), o vacío si no hay contacto. Nombre y teléfono van juntos o ambos vacíos.
+- `donante`: booleano.
 
 ## Forma JSON de `CardInfo`
 

@@ -5,10 +5,12 @@ import type {
   Citizen,
   EventItem,
   LoginInput,
+  OptionalData,
   RegisterInput,
   Terminal,
   User,
 } from './types'
+import { EMPTY_OPTIONAL_DATA } from '../lib/optionalData'
 
 // Datos de demostración: las contraseñas en texto plano solo existen en el mock.
 type MockAccount = User & { password: string; edad: number }
@@ -245,4 +247,35 @@ export async function mockGetCardInfo(): Promise<CardInfo> {
   const card = mockCards[user.id]
   if (!card) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
   return card
+}
+
+function requireSessionUser(): User {
+  const user = findUserById(sessionStorage.getItem(SESSION_KEY))
+  if (!user) {
+    emitUnauthorized()
+    throw new ApiError(401, 'Tu sesión no es válida. Inicia sesión de nuevo.')
+  }
+  return user
+}
+
+function optionalDataKey(userId: string): string {
+  return `sisa:mock-optional:${userId}`
+}
+
+export async function mockGetOptionalData(): Promise<OptionalData> {
+  await delay()
+  const user = requireSessionUser()
+  try {
+    const raw = sessionStorage.getItem(optionalDataKey(user.id))
+    return raw ? (JSON.parse(raw) as OptionalData) : EMPTY_OPTIONAL_DATA
+  } catch {
+    return EMPTY_OPTIONAL_DATA
+  }
+}
+
+export async function mockSaveOptionalData(data: OptionalData): Promise<OptionalData> {
+  await delay()
+  const user = requireSessionUser()
+  sessionStorage.setItem(optionalDataKey(user.id), JSON.stringify(data))
+  return data
 }

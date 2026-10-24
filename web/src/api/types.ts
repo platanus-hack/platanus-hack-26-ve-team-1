@@ -1,3 +1,4 @@
+import type { BloodType } from '../lib/optionalData'
 import type { ROLES, Role } from '../lib/roles'
 
 /** Valores exactos del contrato con P1: 'ciudadano' | 'emisor' | 'comercio' (minúscula, sin tilde). */
@@ -62,6 +63,15 @@ export type Citizen = {
   email: string
   edad: number
   cedula: CardStatus
+}
+
+/** Datos opcionales que el ciudadano pide escribir en su chip. */
+export type OptionalData = {
+  tipoSangre: BloodType | null
+  alergias: string
+  /** Teléfono en formato internacional (E.164), p. ej. "+56912345678". */
+  contactoEmergencia: { nombre: string; telefono: string }
+  donante: boolean
 }
 
 export type LoginInput = {
