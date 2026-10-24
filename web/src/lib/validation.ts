@@ -25,6 +25,16 @@ export function validateAllergies(value: string): string | undefined {
   }
 }
 
+export const MAX_TERMINAL_NAME_LENGTH = 60
+
+export function validateTerminalName(value: string): string | undefined {
+  const name = value.trim()
+  if (!name) return 'Ingresa un nombre para el terminal.'
+  if (name.length > MAX_TERMINAL_NAME_LENGTH) {
+    return `El nombre no puede superar los ${MAX_TERMINAL_NAME_LENGTH} caracteres.`
+  }
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const MIN_PASSWORD_LENGTH = 8

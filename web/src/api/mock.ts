@@ -11,6 +11,8 @@ import type {
   RegisterInput,
   Student,
   Terminal,
+  TerminalInput,
+  TerminalStats,
   User,
 } from './types'
 import { EMPTY_OPTIONAL_DATA } from '../lib/optionalData'
@@ -187,14 +189,33 @@ function randomMockEvent(userId: string): MockBackendEvent {
   return backendEvent(id, local, atributo, resultado, hora)
 }
 
-export const mockTerminals: Terminal[] = [
+const MOCK_SEED_TERMINALS: Terminal[] = [
+  { id: 't-1', nombre: 'Caja principal', rol: 'comercio', atributos: ['mayor_de_18'] },
   {
-    id: 't-1',
-    nombre: 'Caja principal',
-    rol: 'comercio',
-    atributo: 'mayor_de_18',
+    id: 't-2',
+    nombre: 'Ficha clínica',
+    rol: 'salud',
+    atributos: ['sangre_alergias', 'contacto_emergencia', 'donante_licencia'],
   },
 ]
+
+// Los terminales del mock viven en sessionStorage (por usuario) y nunca guardan el token.
+function terminalsKey(userId: string): string {
+  return `sisa:mock-terminals:${userId}`
+}
+
+function loadTerminals(userId: string): Terminal[] {
+  try {
+    const raw = sessionStorage.getItem(terminalsKey(userId))
+    return raw ? (JSON.parse(raw) as Terminal[]) : MOCK_SEED_TERMINALS
+  } catch {
+    return MOCK_SEED_TERMINALS
+  }
+}
+
+function saveTerminals(userId: string, terminals: Terminal[]): void {
+  sessionStorage.setItem(terminalsKey(userId), JSON.stringify(terminals))
+}
 
 function delay(): Promise<void> {
   const ms = 300 + Math.random() * 300
@@ -463,6 +484,86 @@ export async function mockGetCitizens(): Promise<Citizen[]> {
 }
 
 const MOCK_EMISSION_DURATION_MS = 7000
+
+function requireComercio(): User {
+  const user = requireSessionUser()
+  if (user.rol !== ROLES.COMERCIO) {
+    throw new ApiError(403, 'No tienes permiso para hacer esto.')
+  }
+  return user
+}
+
+function validateTerminalInput(input: TerminalInput): void {
+  if (!input.nombre.trim()) throw new ApiError(400, 'El nombre del terminal es obligatorio.')
+  if (input.atributos.length === 0) {
+    throw new ApiError(400, 'Elige el dato que pide el terminal.')
+  }
+}
+
+export async function mockGetTerminals(): Promise<Terminal[]> {
+  await delay()
+  return loadTerminals(requireComercio().id)
+}
+
+/** Devuelve el token en claro una sola vez; no se guarda en ningún lado. */
+export async function mockCreateTerminal(input: TerminalInput): Promise<Terminal> {
+  await delay()
+  const user = requireComercio()
+  validateTerminalInput(input)
+  const terminal: Terminal = {
+    id: `t-${crypto.randomUUID().slice(0, 8)}`,
+    nombre: input.nombre.trim(),
+    rol: input.rol,
+    atributos: input.atributos,
+  }
+  saveTerminals(user.id, [...loadTerminals(user.id), terminal])
+  const token = `sisa_demo_${crypto.randomUUID().replaceAll('-', '')}`
+  return { ...terminal, token }
+}
+
+export async function mockUpdateTerminal(id: string, input: TerminalInput): Promise<Terminal> {
+  await delay()
+  const user = requireComercio()
+  validateTerminalInput(input)
+  const terminals = loadTerminals(user.id)
+  const current = terminals.find((terminal) => terminal.id === id)
+  if (!current) throw new ApiError(404, 'No encontramos ese terminal.')
+  const updated: Terminal = {
+    id,
+    nombre: input.nombre.trim(),
+    rol: input.rol,
+    atributos: input.atributos,
+  }
+  saveTerminals(
+    user.id,
+    terminals.map((terminal) => (terminal.id === id ? updated : terminal)),
+  )
+  return updated
+}
+
+export async function mockDeleteTerminal(id: string): Promise<void> {
+  await delay()
+  const user = requireComercio()
+  const terminals = loadTerminals(user.id)
+  if (!terminals.some((terminal) => terminal.id === id)) {
+    throw new ApiError(404, 'No encontramos ese terminal.')
+  }
+  saveTerminals(
+    user.id,
+    terminals.filter((terminal) => terminal.id !== id),
+  )
+}
+
+/** Totales inventados pero estables por terminal (derivados del id). */
+export async function mockGetStats(): Promise<TerminalStats[]> {
+  await delay()
+  return loadTerminals(requireComercio().id).map((terminal) => {
+    const seed = [...terminal.id].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+    const aprobadas = 12 + (seed % 30)
+    const rechazadas = 1 + (seed % 7)
+    return { terminalId: terminal.id, hoy: 5 + (seed % 9), aprobadas, rechazadas }
+  })
+}
 
 // Carnets universitarios del mock: Luis ya tiene uno; el resto se emite en sessionStorage.
 const MOCK_STUDENT_BASE_ISSUED: Record<string, string> = {

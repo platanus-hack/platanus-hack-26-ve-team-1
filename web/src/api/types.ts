@@ -1,5 +1,5 @@
 import type { BloodType } from '../lib/optionalData'
-import type { ROLES, Role } from '../lib/roles'
+import type { Role } from '../lib/roles'
 
 /** Valores exactos del contrato con P1: 'ciudadano' | 'emisor' | 'comercio' (minúscula, sin tilde). */
 export type { Role }
@@ -55,13 +55,31 @@ export type EventItem = {
   emergencia: boolean
 }
 
+/** Tipo de terminal: define qué datos puede pedir. No confundir con el rol del usuario. */
+export type TerminalRole = 'comercio' | 'registro' | 'salud' | 'emergencia'
+
 export type Terminal = {
   id: string
   nombre: string
-  rol: Exclude<Role, typeof ROLES.CIUDADANO>
-  atributo: Attribute
-  /** Solo se entrega al crear o regenerar el terminal. */
+  rol: TerminalRole
+  /** Datos que pide el terminal; depende del rol (ver lib/terminals.ts). */
+  atributos: Attribute[]
+  /** Solo llega al crear el terminal, una única vez; las demás respuestas no lo incluyen. */
   token?: string
+}
+
+export type TerminalInput = {
+  nombre: string
+  rol: TerminalRole
+  atributos: Attribute[]
+}
+
+/** Totales de uso de un terminal. Solo cifras: nunca handles, UID ni datos personales. */
+export type TerminalStats = {
+  terminalId: string
+  hoy: number
+  aprobadas: number
+  rechazadas: number
 }
 
 /** Estado de la cédula de un ciudadano, visto por el emisor. */

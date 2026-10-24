@@ -154,6 +154,36 @@ Supuestos del frontend, pendientes de confirmar con P1 (rutas en `UNIVERSITY_END
 - `id` es interno: el frontend lo usa solo para llamar a la API y nunca lo muestra (tampoco handles ni UID).
 - Preguntas abiertas: ¿el `POST` devuelve el carnet emitido o solo `2xx`? ¿Un estudiante con carnet emitido puede volver a recibir uno (re-emisión)? El frontend hoy no ofrece esa acción.
 
+## Terminales del comercio (`/comercio`): endpoints supuestos
+
+Supuestos del frontend, pendientes de confirmar con P1 (rutas en `TERMINAL_ENDPOINTS`, `api/terminals.ts`). Todos exigen rol `comercio`.
+
+| Método | Ruta (con `/api`) | Cuerpo | Respuesta esperada |
+|--------|-------------------|--------|--------------------|
+| `GET` | `/api/terminals` | — | `200` con una lista de `Terminal` **sin token**. |
+| `POST` | `/api/terminals` | `TerminalInput` | `2xx` con el `Terminal` creado **incluyendo `token`** (única vez que se entrega). |
+| `PUT` | `/api/terminals/:id` | `TerminalInput` | `200` con el `Terminal` actualizado, sin token. |
+| `DELETE` | `/api/terminals/:id` | — | `2xx`. El terminal deja de funcionar y su token queda inválido. |
+| `GET` | `/api/stats` | — | `200` con una lista de `{ "terminalId", "hoy", "aprobadas", "rechazadas" }`. |
+
+```json
+{ "id": "t-1", "nombre": "Caja principal", "rol": "comercio", "atributos": ["mayor_de_18"] }
+```
+
+```json
+{ "nombre": "Caja principal", "rol": "comercio", "atributos": ["mayor_de_18"] }
+```
+
+- `rol` del terminal (no confundir con el rol del usuario): `"comercio"`, `"registro"`, `"salud"` o `"emergencia"`. `atributos` usa los valores de `CardInfo.atributos`.
+- Datos que pide cada tipo (el frontend los fija; el servidor debe validarlos):
+  - `comercio` → `mayor_de_18` **o** `mayor_de_21` (uno solo).
+  - `registro` → `identidad`.
+  - `salud` → `sangre_alergias`, `contacto_emergencia`, `donante_licencia`.
+  - `emergencia` → `sangre_alergias`, `contacto_emergencia`. **Lee sin consentimiento del ciudadano**: la UI lo avisa.
+- El token solo se muestra una vez en un Modal; el frontend no lo guarda en estado global, `localStorage` ni `sessionStorage`, y lo descarta al cerrar el Modal.
+- `GET /api/stats` devuelve solo totales por terminal: nunca handles, UID ni datos personales. `terminalId` es interno y no se muestra.
+- Preguntas abiertas: ¿`PUT` permite cambiar el `rol` de un terminal existente? ¿Hace falta un endpoint para regenerar el token? ¿`stats` admite filtrar por fecha?
+
 ## Forma JSON de `CardInfo`
 
 ```json

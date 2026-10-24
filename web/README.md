@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# sIsA · portal web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Frontend de sIsA, un prototipo de cédula electrónica que muestra solo el dato necesario (por ejemplo, «mayor de 18») y no los datos completos. React + TypeScript + Vite + Tailwind CSS v4.
 
-Currently, two official plugins are available:
+## Comandos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Usa Node 22.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev     # servidor de desarrollo
+npm run build   # comprobación de tipos + build de producción
+npm run lint    # Oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Variables de entorno
+
+Copia `.env.example` a `.env.local` (ignorado por git).
+
+- `VITE_USE_MOCK=true`: toda la capa `src/api` usa datos de demostración, sin backend. Cuentas demo (contraseña `demo1234`): `ana@sisa.demo`, `luis@sisa.demo`, `maria@sisa.demo` (ciudadanos), `emisor@sisa.demo` y `comercio@sisa.demo`.
+- `VITE_USE_MOCK=false` (o sin definir): se llama a la API real en `/api/*` con la cookie de sesión (`credentials: "include"`). En producción debe ir en `false`: así el código del mock no entra al bundle.
+
+## Rutas
+
+| Ruta | Rol | Contenido |
+|------|-----|-----------|
+| `/` | ciudadano | Portal ciudadano |
+| `/emisor` | emisor | Cédulas y carnets universitarios |
+| `/comercio` | comercio | Terminales y uso |
+| `/login`, `/registro` | público | Acceso |
+| `/billetera`, `/verificar` | (P4) | Placeholders |
+| `/ui-kit` | solo en desarrollo | Catálogo de componentes |
+
+## Estructura de `src/`
+
+`api/` (cliente, tipos y mock) · `components/` (`ui/` genéricos, `issuer/`, `merchant/`) · `hooks/` · `layouts/` · `lib/` · `pages/`.
+
+Los endpoints que el backend aún no confirma están en `docs/PENDIENTES_P1.md`.

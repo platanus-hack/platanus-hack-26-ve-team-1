@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { AuthProvider } from './components/AuthProvider'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastProvider } from './components/ui'
 import { ROLES } from './lib/roles'
@@ -17,35 +18,38 @@ import WalletPage from './pages/WalletPage'
 
 function App() {
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route element={<ProtectedRoute roles={[ROLES.CIUDADANO]} />}>
-                  <Route index element={<HomePage />} />
-                  <Route path="billetera" element={<WalletPage />} />
+    <ErrorBoundary>
+      <ToastProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route element={<ProtectedRoute roles={[ROLES.CIUDADANO]} />}>
+                    <Route index element={<HomePage />} />
+                    <Route path="billetera" element={<WalletPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute roles={[ROLES.EMISOR]} />}>
+                    <Route path="emisor" element={<IssuerPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute roles={[ROLES.COMERCIO]} />}>
+                    <Route path="comercio" element={<MerchantPage />} />
+                  </Route>
+                  <Route path="verificar" element={<VerifyPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Route>
-                <Route element={<ProtectedRoute roles={[ROLES.EMISOR]} />}>
-                  <Route path="emisor" element={<IssuerPage />} />
-                </Route>
-                <Route element={<ProtectedRoute roles={[ROLES.COMERCIO]} />}>
-                  <Route path="comercio" element={<MerchantPage />} />
-                </Route>
-                <Route path="verificar" element={<VerifyPage />} />
-                <Route path="*" element={<NotFoundPage />} />
               </Route>
-            </Route>
-            <Route element={<AuthLayout />}>
-              <Route path="login" element={<LoginPage />} />
-              <Route path="registro" element={<RegisterPage />} />
-            </Route>
-            <Route path="/ui-kit" element={<UiKitPage />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </ToastProvider>
+              <Route element={<AuthLayout />}>
+                <Route path="login" element={<LoginPage />} />
+                <Route path="registro" element={<RegisterPage />} />
+              </Route>
+              {/* Página de pruebas visuales: solo en desarrollo, nunca en producción. */}
+              {import.meta.env.DEV && <Route path="/ui-kit" element={<UiKitPage />} />}
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </ToastProvider>
+    </ErrorBoundary>
   )
 }
 
