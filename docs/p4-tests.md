@@ -3,10 +3,10 @@
 ## Cómo correrlas
 
 ```bash
-node --test "app/lib/slj/**/*.test.ts"          # 74 pruebas del núcleo (Node 26, sin dependencias)
+node --test "web/tests/slj/**/*.test.ts"          # 96 pruebas del núcleo (Node 26, sin dependencias)
 cd tools/slj && go vet ./... && go test ./...   # CLI Go: códec, vectores, CLI como subproceso
 cd tools/slj && go test -run xxx -fuzz=FuzzVerifyPresentation -fuzztime=30s
-cd tools/slj && go run . vectors -out ../../app/lib/slj/testdata/vectors.json   # regenera vectores y corre ambos lados de nuevo
+cd tools/slj && go run . vectors -out ../../web/tests/slj/testdata/vectors.json   # regenera vectores y corre ambos lados de nuevo
 ```
 
 CI: `.github/workflows/p4.yml` (solo se dispara si cambian rutas de P4). El job `conformance` regenera los vectores y la presentación de WebCrypto y las verifica en ambos sentidos.
@@ -22,6 +22,8 @@ Salió del grafo de graphify (comunidades por módulo); cada comunidad de códig
 | P-256 | `p256.ts` | `p256.test.ts`: compresión con ambas paridades, puntos fuera de la curva, llave no extraíble |
 | Verificación | `verify.ts`, `present.ts` | `verify.test.ts`: todos los códigos, bordes de hora y vencimiento, precedencias, anti-reuso |
 | Contrato de P1 | `codec.ts`, `p256.ts`, `events.ts` | `p1.test.ts` y `p1_test.go`: credenciales y claves reales de P1; `events.test.ts`: eventos que acepta la API |
+| Cola de eventos y billetera | `outbox.ts`, `wallet.ts`, `qrPath.ts` | `outbox.test.ts` (envío en orden, reintento, descarte, tope de 500), `wallet.test.ts` (respuesta de P1, credenciales rotas, vencidas, trazo del QR ida y vuelta) |
+| Service worker | `web/public/sw-p4.js` | `sw.test.ts`: simulador de la Cache API; nunca toca `/api/*`, navegación sin red, caché de `/assets/` |
 | Almacén IndexedDB | `store.ts` | `store.test.ts` sobre `test/fake-idb.ts`: llave única, blob de revocaciones, outbox concurrente y atómico, una sola conexión |
 | Flujo completo | todo el núcleo | `flow.test.ts`: escenarios de la demo y modo avión |
 | Robustez | `verify.ts` | `fuzz.test.ts` (3.000 mutaciones) y `FuzzVerifyPresentation` (Go) |
@@ -60,4 +62,5 @@ La verificación corta en el primer fallo, en este orden: formato (08) → hora 
 ## Lo que estas pruebas no cubren
 
 - IndexedDB, la cámara y WebCrypto en iPhone y Android reales: se validan a mano con `app/public/p4-lab` sobre HTTPS.
-- Las páginas `/billetera` y `/verificar` y el service worker: aún no existen (dependen del scaffold de P5).
+- Las pantallas `/billetera` y `/verificar` no tienen pruebas automáticas de interfaz: se recorrieron a mano en el navegador (modo demostración) y se comprueban con `npm run lint` y `npm run build` (CI, job `web`).
+- El service worker se prueba en un simulador, no en un navegador real: falta confirmar el registro, la instalación y el modo avión en iPhone y Android.

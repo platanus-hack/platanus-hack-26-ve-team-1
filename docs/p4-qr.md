@@ -1,6 +1,6 @@
 # P4 · QR SLJ1 y verificación
 
-La fuente de verdad es el **contrato de P1** (`docs/contrato.md` en la rama `p1-backend`). P4 no define formatos propios: este documento solo explica cómo lo implementa `app/lib/slj` y qué decisiones quedan de nuestro lado. Todo es big-endian y las firmas son ECDSA P-256 / SHA-256 crudas `r‖s` de 64 B.
+La fuente de verdad es el **contrato de P1** (`docs/contrato.md` en la rama `p1-backend`). P4 no define formatos propios: este documento solo explica cómo lo implementa `web/src/lib/slj` y qué decisiones quedan de nuestro lado. Todo es big-endian y las firmas son ECDSA P-256 / SHA-256 crudas `r‖s` de 64 B.
 
 ## Credencial de billetera (la emite P1)
 
@@ -61,15 +61,15 @@ Del contrato (los únicos que conocen la API y el UNO): 01 aprobado · 02 firma 
 
 ## Pruebas contra P1
 
-`app/lib/slj/testdata/p1-*.json` son copias de `docs/credenciales-billetera-prueba.json` y `keys/issuers.json` de P1 (claves de prueba públicas). `p1.test.ts` (TS) y `p1_test.go` (Go) verifican QR hechos con **esas** credenciales y con el celular de prueba de P1.
+`web/tests/slj/testdata/p1-*.json` son copias de `docs/credenciales-billetera-prueba.json` y `keys/issuers.json` de P1 (claves de prueba públicas). `p1.test.ts` (TS) y `p1_test.go` (Go) verifican QR hechos con **esas** credenciales y con el celular de prueba de P1.
 
 ## Herramientas
 
 ```bash
-node --test "app/lib/slj/**/*.test.ts"
+node --test "web/tests/slj/**/*.test.ts"
 cd tools/slj && go test ./...
 cd tools/slj && go run . present                       # QR SLJ1 fresco del dispositivo de prueba
-cd tools/slj && go run . verify -keys ../../app/lib/slj/testdata/p1-issuers.json -rev revocations.json 'SLJ1:...'
+cd tools/slj && go run . verify -keys ../../web/tests/slj/testdata/p1-issuers.json -rev revocations.json 'SLJ1:...'
 ```
 
 `verify -keys` acepta el `keys/issuers.json` de P1 y `-rev` acepta el JSON de `/api/revocations`. Las claves de `tools/slj` y de los vectores son **solo de prueba**.
