@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,12 @@ type Server struct {
 	Issuers   map[byte]*ecdsa.PrivateKey
 	ValidDays int // vigencia de lo que se firma
 	Now       func() time.Time
+
+	Notifier      Notifier // nil: no se envían avisos de WhatsApp
+	WebhookSecret string   // secreto del webhook de Kapso
+
+	wg   sync.WaitGroup
+	keys recentKeys
 }
 
 func (s *Server) now() time.Time {
@@ -39,11 +46,13 @@ func (s *Server) Routes(r chi.Router) {
 	r.Post("/api/auth/register", s.register)
 	r.Post("/api/auth/login", s.login)
 	r.Post("/api/auth/logout", s.logout)
+	r.Post("/api/webhooks/kapso", s.kapsoWebhook) // autenticado por firma HMAC
 
 	// Sesión (ciudadano, emisor, comercio)
 	r.Group(func(r chi.Router) {
 		r.Use(s.session)
 		r.Get("/api/me", s.me)
+		r.Patch("/api/me", s.patchMe)
 		r.Get("/api/wallet", s.wallet)
 		r.Post("/api/link/confirm", s.linkConfirm)
 		r.Post("/api/revoke", s.revoke)

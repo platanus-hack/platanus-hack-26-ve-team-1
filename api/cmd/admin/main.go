@@ -46,6 +46,7 @@ func main() {
 		role := fs.String("role", "comercio", "comercio|registro|salud|transito|emergencia")
 		attr := fs.String("attr", "", "atributo que pide (A1..A6), opcional")
 		modo := fs.String("modo", "verificar", "verificar|emergencia|emitir|vincular")
+		owner := fs.String("owner", "", "correo del dueño (recibe la alerta de manipulación), opcional")
 		fs.Parse(args)
 		if *name == "" {
 			log.Fatal("falta -name")
@@ -61,10 +62,18 @@ func main() {
 		raw := make([]byte, 32)
 		rand.Read(raw)
 		token := hex.EncodeToString(raw)
+		var ownerID *int64
+		if *owner != "" {
+			var oid int64
+			if err := db.QueryRow(ctx, `SELECT id FROM citizens WHERE email = $1`, strings.ToLower(*owner)).Scan(&oid); err != nil {
+				log.Fatalf("no existe un usuario con el correo %s", *owner)
+			}
+			ownerID = &oid
+		}
 		var id int64
 		err := db.QueryRow(ctx,
-			`INSERT INTO terminals (name, role, attribute, modo, token_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-			*name, *role, a, *modo, terminal.HashToken(token)).Scan(&id)
+			`INSERT INTO terminals (name, role, attribute, modo, owner_id, token_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+			*name, *role, a, *modo, ownerID, terminal.HashToken(token)).Scan(&id)
 		if err != nil {
 			log.Fatalf("no se pudo crear el terminal: %v", err)
 		}

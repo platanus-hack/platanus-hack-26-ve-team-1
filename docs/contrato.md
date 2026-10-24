@@ -146,3 +146,17 @@ Credenciales de billetera derivadas: A1, A2 y A6 (si existen y no han vencido). 
 | A6 | `donor_license` tal cual (≤ 16 B) | no vacío |
 
 Todo lo firmado vence a los 365 días de la emisión.
+
+## Avisos de WhatsApp (Kapso)
+
+Variables: `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID`, `KAPSO_WEBHOOK_SECRET`. Teléfonos guardados solo con dígitos y código de país (`0424...` se toma como Venezuela: `58424...`). El ciudadano los cambia con `PATCH /api/me` `{whatsapp, notifications}`.
+
+| Disparador | Mensaje | A quién |
+|---|---|---|
+| `verif` con `res = 01` | "Tu cédula compartió 'Mayor de 18' con Bar La Esquina hoy a las 21:40. ¿No fuiste tú?" + botón **Bloquear cédula** | Dueño de la cédula, si tiene teléfono y avisos activos |
+| `verif` con `res = 01` y `emg = true` | "Un terminal de emergencia (X) leyó tu tipo de sangre y contacto hoy a las 21:40. ¿No fuiste tú?" + botón | Igual |
+| `tamper` | "Alerta: el terminal 'X' detectó manipulación hoy a las 21:40. Revisa el equipo." | Dueño del terminal (`terminals.owner_id`) |
+
+Si el envío con botones falla, se manda el mismo texto con "Responde BLOQUEAR." Las lecturas con otro resultado (firma inválida, revocada, vencida, sin permiso, rechazada) no generan aviso. Las horas van en hora de Venezuela (UTC-4).
+
+**Webhook** `POST /api/webhooks/kapso` (evento `whatsapp.message.received`): se valida `X-Webhook-Signature` (HMAC-SHA256 hex del cuerpo crudo con `KAPSO_WEBHOOK_SECRET`); sin secreto configurado responde 503, con firma mala 401. Si quien escribe envía BLOQUEAR o toca el botón (`id = bloquear`), se revocan todas las cédulas activas de la cuenta con ese teléfono, se borran sus credenciales de billetera y se responde "Tu cédula fue bloqueada. Puedes reactivarla desde el portal." Cualquier otro mensaje se ignora. `X-Idempotency-Key` evita responder dos veces ante un reintento.

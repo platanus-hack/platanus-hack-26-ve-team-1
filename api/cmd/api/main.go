@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/api"
+	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/kapso"
 	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/sign"
 )
 
@@ -51,7 +52,18 @@ func main() {
 			}
 			issuers[code] = k
 		}
-		(&api.Server{DB: db, JWTSecret: []byte(secret), Issuers: issuers, ValidDays: 365}).Routes(r)
+		srv := &api.Server{DB: db, JWTSecret: []byte(secret), Issuers: issuers, ValidDays: 365,
+			WebhookSecret: os.Getenv("KAPSO_WEBHOOK_SECRET")}
+		if key, id := os.Getenv("KAPSO_API_KEY"), os.Getenv("KAPSO_PHONE_NUMBER_ID"); key != "" && id != "" {
+			srv.Notifier = kapso.New(key, id)
+		} else {
+			log.Print("aviso: KAPSO_API_KEY o KAPSO_PHONE_NUMBER_ID vacíos; no se enviarán avisos de WhatsApp")
+		}
+		if srv.WebhookSecret == "" {
+			log.Print("aviso: KAPSO_WEBHOOK_SECRET vacío; el webhook de Kapso responderá 503")
+		}
+		srv.Routes(r)
+		defer srv.Wait()
 	} else {
 		log.Print("DATABASE_URL vacío: solo /api/health")
 	}

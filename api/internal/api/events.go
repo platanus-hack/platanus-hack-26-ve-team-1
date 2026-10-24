@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -56,7 +57,7 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := userFrom(r.Context())
-	ok, err := s.Revoke(r, handle, u.Role == "emisor", u.ID)
+	ok, err := s.Revoke(r.Context(), handle, u.Role == "emisor", u.ID)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -69,8 +70,7 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 }
 
 // Revoke marca la cédula como revocada. Si anyOwner es falso, solo se revoca si pertenece a citizenID.
-func (s *Server) Revoke(r *http.Request, handle []byte, anyOwner bool, citizenID int64) (bool, error) {
-	ctx := r.Context()
+func (s *Server) Revoke(ctx context.Context, handle []byte, anyOwner bool, citizenID int64) (bool, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return false, err
@@ -120,6 +120,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			serverErr(w, err)
 			return
 		}
+		s.notifyTamper(term.ID, term.Local, at)
 	case "verif":
 		handle, err := parseHandle(in.H)
 		if err != nil {
@@ -138,6 +139,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			serverErr(w, err)
 			return
+		}
+		if res == 1 { // solo un acceso aprobado se avisa al ciudadano
+			s.notifyUse(handle, term.Local, attr, in.Emg, at)
 		}
 	default:
 		writeErr(w, http.StatusBadRequest, "t debe ser verif o tamper")
