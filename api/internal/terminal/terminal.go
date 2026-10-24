@@ -22,7 +22,7 @@ type Terminal struct {
 	ID    int64
 	Local string
 	Rol   string
-	Attr  *int16
+	Attrs []int16 // atributos que pide; el lector usa el primero
 	Modo  string
 }
 
@@ -43,8 +43,8 @@ func Auth(db *pgxpool.Pool) func(http.Handler) http.Handler {
 			}
 			var t Terminal
 			err := db.QueryRow(r.Context(),
-				`SELECT id, name, role, attribute, modo FROM terminals WHERE token_hash = $1`,
-				HashToken(token)).Scan(&t.ID, &t.Local, &t.Rol, &t.Attr, &t.Modo)
+				`SELECT id, name, role, attributes, modo FROM terminals WHERE token_hash = $1`,
+				HashToken(token)).Scan(&t.ID, &t.Local, &t.Rol, &t.Attrs, &t.Modo)
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeErr(w, http.StatusUnauthorized, "token inválido")
 				return
@@ -71,11 +71,15 @@ func Config(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "sin terminal")
 		return
 	}
-	a := ""
-	if t.Attr != nil {
-		a = fmt.Sprintf("A%d", *t.Attr)
+	a, list := "", []string{}
+	for i, n := range t.Attrs {
+		l := fmt.Sprintf("A%d", n)
+		list = append(list, l)
+		if i == 0 {
+			a = l
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"rol": t.Rol, "a": a, "local": t.Local, "modo": t.Modo})
+	writeJSON(w, http.StatusOK, map[string]any{"rol": t.Rol, "a": a, "atributos": list, "local": t.Local, "modo": t.Modo})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

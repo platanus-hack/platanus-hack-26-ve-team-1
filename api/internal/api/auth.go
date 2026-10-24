@@ -19,13 +19,31 @@ import (
 const cookieName = "slj_session"
 const sessionTTL = 7 * 24 * time.Hour
 
+// User usa los nombres del front. Telefono va en formato +58...
 type User struct {
 	ID            int64  `json:"id"`
 	Email         string `json:"email"`
-	Name          string `json:"name"`
-	Role          string `json:"role"`
-	Whatsapp      string `json:"whatsapp"`
-	Notifications bool   `json:"notifications"`
+	Name          string `json:"nombre"`
+	Role          string `json:"rol"`
+	Whatsapp      string `json:"telefono"`
+	Notifications bool   `json:"avisosActivados"`
+}
+
+// userEnv devuelve los campos del usuario en la raíz y también dentro de "user".
+type userEnv struct {
+	OK bool `json:"ok"`
+	User
+	Nested User `json:"user"`
+}
+
+func envelope(u User) userEnv { return userEnv{OK: true, User: u, Nested: u} }
+
+// phoneOut da el teléfono guardado (solo dígitos) como +58...
+func phoneOut(digits string) string {
+	if digits == "" {
+		return ""
+	}
+	return "+" + digits
 }
 
 type userKey struct{}
@@ -56,11 +74,15 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 		Name     string `json:"name"`
+		Nombre   string `json:"nombre"`
 		Phone    string `json:"whatsapp"`
+		Telefono string `json:"telefono"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
+	in.Name = firstNonEmpty(in.Nombre, in.Name)
+	in.Phone = firstNonEmpty(in.Telefono, in.Phone)
 	addr, err := mail.ParseAddress(strings.TrimSpace(in.Email))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "correo inválido")
@@ -83,7 +105,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	// El rol siempre es ciudadano: emisor y comercio se asignan fuera de la API.
 	u := User{Email: email, Name: strings.TrimSpace(in.Name), Role: "ciudadano", Notifications: true}
 	if phone != nil {
-		u.Whatsapp = *phone
+		u.Whatsapp = phoneOut(*phone)
 	}
 	err = s.DB.QueryRow(r.Context(),
 		`INSERT INTO citizens (email, password_hash, name, whatsapp_phone) VALUES ($1,$2,$3,$4) RETURNING id`,
@@ -101,7 +123,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "user": u})
+	writeJSON(w, http.StatusCreated, envelope(u))
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +134,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var u User
 	var hash string
 	err := s.DB.QueryRow(r.Context(),
-		`SELECT id, email, name, role, coalesce(whatsapp_phone, ''), notifications, password_hash FROM citizens WHERE email = $1`,
+		`SELECT id, email, name, role, coalesce('+' || whatsapp_phone, ''), notifications, password_hash FROM citizens WHERE email = $1`,
 		strings.ToLower(strings.TrimSpace(in.Email))).Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Whatsapp, &u.Notifications, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(in.Password))
@@ -131,7 +153,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": u})
+	writeJSON(w, http.StatusOK, envelope(u))
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +179,7 @@ func (s *Server) session(next http.Handler) http.Handler {
 		}
 		u := User{ID: id}
 		err = s.DB.QueryRow(r.Context(),
-			`SELECT email, name, role, coalesce(whatsapp_phone, ''), notifications FROM citizens WHERE id = $1`, id).
+			`SELECT email, name, role, coalesce('+' || whatsapp_phone, ''), notifications FROM citizens WHERE id = $1`, id).
 			Scan(&u.Email, &u.Name, &u.Role, &u.Whatsapp, &u.Notifications)
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeErr(w, http.StatusUnauthorized, "sesión inválida")
@@ -192,19 +214,43 @@ func userFrom(ctx context.Context) User {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": userFrom(r.Context())})
+	writeJSON(w, http.StatusOK, envelope(userFrom(r.Context())))
 }
 
 // patchMe actualiza el teléfono de WhatsApp y si se reciben avisos.
 func (s *Server) patchMe(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Whatsapp      *string `json:"whatsapp"`
-		Notifications *bool   `json:"notifications"`
-	}
+	var in notificationsIn
 	if !readJSON(w, r, &in) {
 		return
 	}
+	s.updateNotifications(w, r, in)
+}
+
+type notificationsIn struct {
+	Whatsapp      *string `json:"whatsapp"`
+	Telefono      *string `json:"telefono"`
+	Notifications *bool   `json:"notifications"`
+	Avisos        *bool   `json:"avisosActivados"`
+}
+
+// putNotifications: PUT /api/me/notifications {telefono, avisosActivados}.
+func (s *Server) putNotifications(w http.ResponseWriter, r *http.Request) {
+	var in notificationsIn
+	if !readJSON(w, r, &in) {
+		return
+	}
+	s.updateNotifications(w, r, in)
+}
+
+func (s *Server) updateNotifications(w http.ResponseWriter, r *http.Request, in notificationsIn) {
+	if in.Telefono != nil {
+		in.Whatsapp = in.Telefono
+	}
+	if in.Avisos != nil {
+		in.Notifications = in.Avisos
+	}
 	u := userFrom(r.Context())
+	u.Whatsapp = kapso.NormalizePhone(u.Whatsapp)
 	if in.Whatsapp != nil {
 		p := kapso.NormalizePhone(*in.Whatsapp)
 		if p != "" && (len(p) < 8 || len(p) > 15) {
@@ -225,5 +271,6 @@ func (s *Server) patchMe(w http.ResponseWriter, r *http.Request) {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": u})
+	u.Whatsapp = phoneOut(u.Whatsapp)
+	writeJSON(w, http.StatusOK, envelope(u))
 }

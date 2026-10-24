@@ -53,13 +53,12 @@ func main() {
 		if *name == "" {
 			log.Fatal("falta -name")
 		}
-		var a *int
+		a := []int16{}
 		if *attr != "" {
 			if len(*attr) != 2 || (*attr)[0] != 'A' || (*attr)[1] < '1' || (*attr)[1] > '6' {
 				log.Fatal("-attr debe ser A1..A6")
 			}
-			n := int((*attr)[1] - '0')
-			a = &n
+			a = []int16{int16((*attr)[1] - '0')}
 		}
 		raw := make([]byte, 32)
 		rand.Read(raw)
@@ -74,7 +73,7 @@ func main() {
 		}
 		var id int64
 		err := db.QueryRow(ctx,
-			`INSERT INTO terminals (name, role, attribute, modo, owner_id, token_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+			`INSERT INTO terminals (name, role, attributes, modo, owner_id, token_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
 			*name, *role, a, *modo, ownerID, terminal.HashToken(token)).Scan(&id)
 		if err != nil {
 			log.Fatalf("no se pudo crear el terminal: %v", err)

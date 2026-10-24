@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/sign"
@@ -31,9 +32,39 @@ type Profile struct {
 		ID         string `json:"id"` // número de carnet
 		ValidUntil string `json:"valid_until"`
 	} `json:"carnet,omitempty"`
-	Blood        string `json:"blood,omitempty"`
-	Contact      string `json:"contact,omitempty"`
-	DonorLicense string `json:"donor_license,omitempty"`
+	// Datos opcionales que declara el propio ciudadano; si existen, mandan sobre blood/contact/donor_license.
+	Optional     *OptionalData `json:"optional,omitempty"`
+	Blood        string        `json:"blood,omitempty"`
+	Contact      string        `json:"contact,omitempty"`
+	DonorLicense string        `json:"donor_license,omitempty"`
+}
+
+// OptionalData son los datos que el ciudadano declara desde su portal.
+type OptionalData struct {
+	Sangre   string `json:"sangre"`
+	Alergias string `json:"alergias"`
+	Contacto *struct {
+		Nombre   string `json:"nombre"`
+		Telefono string `json:"telefono"`
+	} `json:"contacto,omitempty"`
+	Donante  bool   `json:"donante"`
+	Licencia string `json:"licencia"`
+}
+
+// derived calcula los textos de A4, A5 y A6 a partir de los datos opcionales.
+func (o *OptionalData) derived() (blood, contact, donorLicense string) {
+	blood = strings.TrimSpace(strings.TrimSpace(o.Sangre) + " " + strings.TrimSpace(o.Alergias))
+	if c := o.Contacto; c != nil && (strings.TrimSpace(c.Nombre) != "" || strings.TrimSpace(c.Telefono) != "") {
+		contact = strings.TrimSpace(strings.TrimSpace(c.Nombre) + " " + strings.TrimSpace(c.Telefono))
+	}
+	if lic := strings.TrimSpace(o.Licencia); o.Donante || lic != "" {
+		d := "N"
+		if o.Donante {
+			d = "D"
+		}
+		donorLicense = d + ";" + lic
+	}
+	return
 }
 
 type attrValue struct {
@@ -43,6 +74,10 @@ type attrValue struct {
 
 // Attributes calcula los atributos que corresponden al perfil en la fecha dada.
 func (p Profile) Attributes(now time.Time) ([]attrValue, error) {
+	if o := p.Optional; o != nil {
+		b, c, d := o.derived()
+		p.Blood, p.Contact, p.DonorLicense = b, c, d
+	}
 	var out []attrValue
 	add := func(code byte, v []byte) error {
 		if len(v) > sign.MaxValueLen(code) {

@@ -112,12 +112,16 @@ Los errores son `{"ok":false,"error":"..."}`. Binarios en hex (handle 16 caracte
 
 | Ruta | Quién | Cuerpo → respuesta |
 |---|---|---|
-| `POST /api/auth/register` | público | `{email,password,name,whatsapp?}` → `{ok,user}`; siempre rol ciudadano |
-| `POST /api/auth/login` · `/logout` | público | `{email,password}` → `{ok,user}` |
-| `GET /api/me` | sesión | `{ok,user}` |
-| `GET /api/citizens` | emisor | `{citizens:[{id,email,name,profile}]}` |
+| `POST /api/auth/register` | público | `{nombre,email,password,telefono?}` (también `name`, `whatsapp`) → usuario; siempre rol ciudadano |
+| `POST /api/auth/login` · `/logout` | público | `{email,password}` → usuario |
+| `GET /api/me` | sesión | usuario (ver abajo) |
+| `PATCH /api/me` · `PUT /api/me/notifications` | sesión | `{telefono?,avisosActivados?}` → usuario; el teléfono acepta `+58 424 ...` |
+| `GET /api/card` | sesión | `{estado:"activa"\|"revocada"\|"sin cédula",emitidaEn,atributos:[{codigo,nombre,presente,valor?,vence?}]}` (los 6) |
+| `GET` · `PUT /api/me/optional-data` | sesión | `{sangre,alergias,contacto:{nombre,telefono},donante,licencia}`; A4/A5/A6 caben en 16 B; se escriben en el chip en la próxima emisión |
+| `GET /api/citizens` | emisor | `{citizens:[{id,nombre,correo,estadoCedula:"activa"\|"revocada"\|"sin emitir",emitidaEn,profile}]}` (sin handle ni UID) |
 | `PUT /api/citizens/{id}/profile` | emisor | perfil (abajo) → `{attributes:["A1",...]}` |
-| `POST /api/emision/request` | emisor | `{citizen_id}`; queda pendiente 10 min |
+| `POST /api/emision/order` (alias `/request`) | emisor | `{ciudadanoId,terminalId?}`; pendiente 10 min. Con `terminalId` (de registro) la orden es para ese terminal y lo pone en modo emitir |
+| `GET /api/emision/status[?ciudadanoId=]` | emisor | `{estado:"pendiente"\|"completado"\|"error",mensaje?}`; completado = bloques entregados al terminal |
 | `POST /api/emision/start` | terminal registro, modo emitir | `{uid}` → `{h,blocks:[{s,b,d}]}` (índice primero) |
 | `POST /api/link/start` | terminal en modo vincular | `{h}` → `{c}` (6 dígitos, 2 min) |
 | `POST /api/link/confirm` | sesión | `{code,public_key}` → `{credentials:[{a,blob_hex,expires}]}`; la cédula debe ser de esa cuenta |
@@ -127,14 +131,18 @@ Los errores son `{"ok":false,"error":"..."}`. Binarios en hex (handle 16 caracte
 | `POST /api/events` | terminal | `{t:"verif",h,a,res,ts,emg}` o `{t:"tamper",ts}` → `{ok}` |
 | `GET /api/revocations` | público | `{hs:[...]}` |
 | `GET /api/issuers` | público | `{"0x01":JWK,"0x02":JWK}` |
-| `POST /api/revoke` | emisor o dueño | `{h}`; borra las credenciales de billetera |
-| `POST /api/reactivate` | emisor o dueño | `{h}`; reactiva la cédula y vuelve a emitir las credenciales de sus celulares |
+| `POST /api/revoke` | emisor o dueño | `{h}` una cédula; **sin cuerpo**, las de la cuenta (el emisor manda `{ciudadanoId}`). Borra las credenciales de billetera |
+| `POST /api/reactivate` | emisor o dueño | igual que revoke; reactiva y vuelve a emitir las credenciales de sus celulares |
 | `GET /api/cards` | sesión | `{cards:[{h,estado,emitida,revocada?,atributos,dispositivos}]}` de la cuenta |
-| `POST /api/carnet/issue` | emisor | `{citizen_id}`; emite o renueva el carnet universitario en sus celulares vinculados |
-| `GET /api/terminals` | emisor | `{terminals:[{id,local,rol,a,modo}]}` |
-| `PATCH /api/terminals/{id}` | emisor | `{modo?,a?}`; el terminal lo lee en `/api/terminal/config` |
+| `GET /api/students` | emisor | `{students:[{id,nombre,correo,carnet,estado:"Sin carnet"\|"Carnet emitido"}]}`: cuentas con datos de carnet |
+| `POST /api/credentials/university` (alias `/api/carnet/issue`) | emisor | `{ciudadanoId}`; emite o renueva el carnet en sus celulares vinculados |
+| `GET /api/terminals` | comercio (los suyos) o emisor (todos) | `{terminals:[{id,local,nombre,rol,a,atributos,modo}]}`; nunca el token |
+| `POST /api/terminals` | comercio | `{nombre,atributos:["A1"]}` → `{terminal,token}`; **el token solo sale aquí**. Un comercio solo pide A1/A2 |
+| `PUT`/`PATCH /api/terminals/{id}` | comercio (suyos) o emisor | `{nombre?,atributos?,modo?}`; solo el emisor cambia el modo |
+| `DELETE /api/terminals/{id}` | comercio (suyos) o emisor | `{ok}` |
+| `GET /api/stats` | comercio o emisor | `{terminals:[{id,local,nombre,hoy,aprobadas,rechazadas}]}` de hoy (hora de Venezuela) |
 | `GET /api/commerce/summary[?days=7]` | comercio o emisor | totales de sus terminales, sin handles |
-| `GET /api/terminal/config` | terminal | `{rol,a,local,modo}` |
+| `GET /api/terminal/config` | terminal | `{rol,a,atributos,local,modo}`; `a` es el primer atributo (el firmware usa solo ese) |
 
 Credenciales de billetera derivadas: A1, A2 y A6 (si existen y no han vencido). Identidad y datos de salud no salen del chip.
 
@@ -201,5 +209,16 @@ Nunca incluye handles ni datos de personas. Los días van en hora de Venezuela.
 
 ### Datos de demo y retención
 
-- `go -C api run ./cmd/admin demo [-ana +58.. -luis +58.. -maria +58..]` siembra o restaura: cuentas `emisor@`, `comercio@`, `ana@`, `luis@`, `maria@slj.test` (misma contraseña) y los terminales Registro (emitir), Bar La Esquina (A1), Clinica Salud (A4), Ambulancia 1 (emergencia) y Transito (A6). Borra cédulas, credenciales, eventos y solicitudes de las cuentas demo y deja los modos en su valor inicial. La contraseña y los tokens quedan en `secrets/demo.json` y no cambian entre restauraciones.
+- `go -C api run ./cmd/admin demo [-historial] [-ana +58.. -luis +58.. -maria +58..]` siembra o restaura (con `-historial`: cédulas de ejemplo, Ana con 3 eventos —uno de emergencia—, Luis con 1 y María con la cédula revocada): cuentas `emisor@`, `comercio@`, `ana@`, `luis@`, `maria@sisa.demo` (misma contraseña) y los terminales Registro (emitir), Bar La Esquina (A1), Clinica Salud (A4), Ambulancia 1 (emergencia) y Transito (A6). Borra cédulas, credenciales, eventos y solicitudes de las cuentas demo y deja los modos en su valor inicial. La contraseña y los tokens quedan en `secrets/demo.json` y no cambian entre restauraciones.
 - `cmd/retention` borra eventos de más de 30 días (`RETENTION_DAYS`), códigos vencidos y solicitudes viejas. Se ejecuta a mano (`go -C api run ./cmd/retention`) o, si hace falta, como Cron Job en Render.
+
+### Usuario
+
+Todas las respuestas de sesión (`register`, `login`, `GET /api/me`, `PATCH /api/me`) traen los campos en la raíz **y** dentro de `user`:
+
+```json
+{"ok":true,"id":17,"email":"ana@sisa.demo","nombre":"Ana Pérez","rol":"ciudadano","telefono":"+584241234567","avisosActivados":true,
+ "user":{"id":17,"email":"ana@sisa.demo","nombre":"Ana Pérez","rol":"ciudadano","telefono":"+584241234567","avisosActivados":true}}
+```
+
+`rol`: `"ciudadano"`, `"emisor"` o `"comercio"`. Los errores traen el mensaje en español en `error`.

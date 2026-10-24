@@ -18,32 +18,6 @@ import (
 // Tiempo que una solicitud de emisión espera a que llegue una tarjeta virgen.
 const requestTTL = 10 * time.Minute
 
-func (s *Server) listCitizens(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.DB.Query(r.Context(),
-		`SELECT id, email, name, profile FROM citizens WHERE role = 'ciudadano' ORDER BY id`)
-	if err != nil {
-		serverErr(w, err)
-		return
-	}
-	defer rows.Close()
-	type item struct {
-		ID      int64           `json:"id"`
-		Email   string          `json:"email"`
-		Name    string          `json:"name"`
-		Profile json.RawMessage `json:"profile"`
-	}
-	out := []item{}
-	for rows.Next() {
-		var it item
-		if err := rows.Scan(&it.ID, &it.Email, &it.Name, &it.Profile); err != nil {
-			serverErr(w, err)
-			return
-		}
-		out = append(out, it)
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "citizens": out})
-}
-
 func (s *Server) putProfile(w http.ResponseWriter, r *http.Request) {
 	id, ok := atoi(chi.URLParam(r, "id"))
 	if !ok {
@@ -60,7 +34,12 @@ func (s *Server) putProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw, _ := json.Marshal(p)
-	tag, err := s.DB.Exec(r.Context(), `UPDATE citizens SET profile = $1 WHERE id = $2 AND role = 'ciudadano'`, raw, id)
+	// Lo que el ciudadano declaró por su cuenta (optional) se conserva si el emisor no lo envía.
+	tag, err := s.DB.Exec(r.Context(),
+		`UPDATE citizens SET profile = CASE
+		     WHEN profile ? 'optional' AND NOT ($1::jsonb ? 'optional') THEN $1::jsonb || jsonb_build_object('optional', profile->'optional')
+		     ELSE $1::jsonb END
+		  WHERE id = $2 AND role = 'ciudadano'`, string(raw), id)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -77,15 +56,22 @@ func (s *Server) putProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // emisionRequest deja pendiente la emisión para el próximo UID que llegue de un terminal de registro.
+// Con terminalId (o terminal_id) la orden queda dirigida a ese terminal, que pasa a modo emitir.
 func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		CitizenID int64 `json:"citizen_id"`
+		CitizenID   int64 `json:"citizen_id"`
+		CiudadanoID int64 `json:"ciudadanoId"`
+		TerminalID  int64 `json:"terminalId"`
+		TerminalID2 int64 `json:"terminal_id"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
+	citizenID := firstNonZero(in.CiudadanoID, in.CitizenID)
+	terminalID := firstNonZero(in.TerminalID, in.TerminalID2)
+	ctx := r.Context()
 	var raw []byte
-	err := s.DB.QueryRow(r.Context(), `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, in.CitizenID).Scan(&raw)
+	err := s.DB.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, citizenID).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "ciudadano no encontrado")
 		return
@@ -100,10 +86,32 @@ func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "el ciudadano no tiene datos para emitir atributos")
 		return
 	}
+	var term *int64
+	if terminalID != 0 {
+		var role string
+		err := s.DB.QueryRow(ctx, `SELECT role FROM terminals WHERE id = $1`, terminalID).Scan(&role)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "terminal no encontrado")
+			return
+		}
+		if err != nil {
+			serverErr(w, err)
+			return
+		}
+		if role != "registro" {
+			writeErr(w, http.StatusBadRequest, "solo un terminal de registro puede emitir")
+			return
+		}
+		if _, err := s.DB.Exec(ctx, `UPDATE terminals SET modo = 'emitir' WHERE id = $1`, terminalID); err != nil {
+			serverErr(w, err)
+			return
+		}
+		term = &terminalID
+	}
 	var id int64
-	err = s.DB.QueryRow(r.Context(),
-		`INSERT INTO issuance_requests (citizen_id, requested_by) VALUES ($1, $2) RETURNING id`,
-		in.CitizenID, userFrom(r.Context()).ID).Scan(&id)
+	err = s.DB.QueryRow(ctx,
+		`INSERT INTO issuance_requests (citizen_id, requested_by, terminal_id) VALUES ($1, $2, $3) RETURNING id`,
+		citizenID, userFrom(ctx).ID, term).Scan(&id)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -149,9 +157,9 @@ func (s *Server) emisionStart(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(r.Context(),
 		`SELECT q.id, q.citizen_id, c.profile
 		   FROM issuance_requests q JOIN citizens c ON c.id = q.citizen_id
-		  WHERE q.used_at IS NULL AND q.created_at > $1
-		  ORDER BY q.created_at LIMIT 1 FOR UPDATE OF q SKIP LOCKED`,
-		s.now().Add(-requestTTL)).Scan(&reqID, &citizenID, &raw)
+		  WHERE q.used_at IS NULL AND q.created_at > $1 AND (q.terminal_id IS NULL OR q.terminal_id = $2)
+		  ORDER BY (q.terminal_id IS NULL), q.created_at LIMIT 1 FOR UPDATE OF q SKIP LOCKED`,
+		s.now().Add(-requestTTL), term.ID).Scan(&reqID, &citizenID, &raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusConflict, "no hay una emisión pendiente")
 		return

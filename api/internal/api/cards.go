@@ -1,13 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -57,48 +57,29 @@ func (s *Server) listCards(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "cards": out})
 }
 
-// reactivate: POST /api/reactivate {h}. Reactiva una cédula revocada (dueño o emisor)
-// y vuelve a emitir las credenciales de billetera de sus dispositivos.
-func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		H string `json:"h"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	handle, err := parseHandle(in.H)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	u := userFrom(r.Context())
-	ctx := r.Context()
+// reactivateOne reactiva una cédula revocada y vuelve a emitir las credenciales de sus celulares.
+// Si anyOwner es falso, solo lo hace si la cédula es de citizenID.
+func (s *Server) reactivateOne(ctx context.Context, handle []byte, anyOwner bool, citizenID int64) (found bool, creds int, err error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
-		serverErr(w, err)
-		return
+		return false, 0, err
 	}
 	defer tx.Rollback(ctx)
-
 	var owner *int64
 	err = tx.QueryRow(ctx,
 		`UPDATE cards SET status = 'activa', revoked_at = NULL
 		  WHERE handle = $1 AND status = 'revocada' AND ($2 OR citizen_id = $3)
-		  RETURNING citizen_id`, handle, u.Role == "emisor", u.ID).Scan(&owner)
+		  RETURNING citizen_id`, handle, anyOwner, citizenID).Scan(&owner)
 	if errors.Is(err, pgx.ErrNoRows) {
-		writeErr(w, http.StatusNotFound, "cédula revocada no encontrada")
-		return
+		return false, 0, nil
 	}
 	if err != nil {
-		serverErr(w, err)
-		return
+		return false, 0, err
 	}
-	creds := []credential{}
 	if owner != nil {
 		rows, err := tx.Query(ctx, `SELECT id, public_key FROM devices WHERE handle = $1`, handle)
 		if err != nil {
-			serverErr(w, err)
-			return
+			return false, 0, err
 		}
 		type dev struct {
 			id  int64
@@ -109,8 +90,7 @@ func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
 			var d dev
 			if err := rows.Scan(&d.id, &d.pub); err != nil {
 				rows.Close()
-				serverErr(w, err)
-				return
+				return false, 0, err
 			}
 			devs = append(devs, d)
 		}
@@ -118,28 +98,108 @@ func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
 		for _, d := range devs {
 			c, err := s.issueWallet(ctx, tx, d.id, handle, d.pub, *owner)
 			if err != nil {
-				serverErr(w, err)
-				return
+				return false, 0, err
 			}
-			creds = append(creds, c...)
+			creds += len(c)
 		}
 	}
-	if err := tx.Commit(ctx); err != nil {
+	return true, creds, tx.Commit(ctx)
+}
+
+// reactivate: POST /api/reactivate. Con {h} reactiva esa cédula; sin cuerpo, las revocadas de la cuenta
+// (el emisor indica {ciudadanoId}). Dueño o emisor.
+func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		H           string `json:"h"`
+		CiudadanoID int64  `json:"ciudadanoId"`
+	}
+	if !readOptionalJSON(w, r, &in) {
+		return
+	}
+	u := userFrom(r.Context())
+	ctx := r.Context()
+	if in.H != "" {
+		handle, err := parseHandle(in.H)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		found, n, err := s.reactivateOne(ctx, handle, u.Role == "emisor", u.ID)
+		if err != nil {
+			serverErr(w, err)
+			return
+		}
+		if !found {
+			writeErr(w, http.StatusNotFound, "cédula revocada no encontrada")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "credentials": n})
+		return
+	}
+	target, ok := s.targetCitizen(w, u, in.CiudadanoID)
+	if !ok {
+		return
+	}
+	rows, err := s.DB.Query(ctx, `SELECT handle FROM cards WHERE citizen_id = $1 AND status = 'revocada'`, target)
+	if err != nil {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "credentials": len(creds)})
+	var handles [][]byte
+	for rows.Next() {
+		var h []byte
+		if err := rows.Scan(&h); err != nil {
+			rows.Close()
+			serverErr(w, err)
+			return
+		}
+		handles = append(handles, h)
+	}
+	rows.Close()
+	total, n := 0, 0
+	for _, h := range handles {
+		found, c, err := s.reactivateOne(ctx, h, true, target)
+		if err != nil {
+			serverErr(w, err)
+			return
+		}
+		if found {
+			n++
+			total += c
+		}
+	}
+	if n == 0 {
+		writeErr(w, http.StatusNotFound, "no hay cédulas revocadas")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "cedulas": n, "credentials": total})
+}
+
+// targetCitizen: el ciudadano actúa sobre sí mismo; el emisor debe indicar a quién.
+func (s *Server) targetCitizen(w http.ResponseWriter, u User, requested int64) (int64, bool) {
+	if u.Role != "emisor" {
+		return u.ID, true
+	}
+	if requested == 0 {
+		writeErr(w, http.StatusBadRequest, "falta ciudadanoId")
+		return 0, false
+	}
+	return requested, true
 }
 
 // issueCarnet: POST /api/carnet/issue {citizen_id}. El emisor (universidad) emite o renueva el
 // carnet universitario en los celulares ya vinculados del ciudadano.
 func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CitizenID int64 `json:"citizen_id"`
+	var raw struct {
+		CitizenID    int64 `json:"citizen_id"`
+		CiudadanoID  int64 `json:"ciudadanoId"`
+		EstudianteID int64 `json:"estudianteId"`
+		ID           int64 `json:"id"`
 	}
-	if !readJSON(w, r, &in) {
+	if !readJSON(w, r, &raw) {
 		return
 	}
+	in := struct{ CitizenID int64 }{firstNonZero(raw.CitizenID, raw.CiudadanoID, raw.EstudianteID, raw.ID)}
 	ctx := r.Context()
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -148,8 +208,8 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	var raw []byte
-	if err := tx.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, in.CitizenID).Scan(&raw); errors.Is(err, pgx.ErrNoRows) {
+	var prof []byte
+	if err := tx.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, in.CitizenID).Scan(&prof); errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "ciudadano no encontrado")
 		return
 	} else if err != nil {
@@ -157,7 +217,7 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var p Profile
-	_ = json.Unmarshal(raw, &p)
+	_ = json.Unmarshal(prof, &p)
 	if _, ok, err := p.CarnetValue(); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -209,86 +269,5 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dispositivos": len(devs)})
-}
-
-// --- Terminales (emisor) ---
-
-type terminalOut struct {
-	ID    int64  `json:"id"`
-	Local string `json:"local"`
-	Rol   string `json:"rol"`
-	A     string `json:"a"`
-	Modo  string `json:"modo"`
-}
-
-func (s *Server) listTerminals(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.DB.Query(r.Context(), `SELECT id, name, role, attribute, modo FROM terminals ORDER BY id`)
-	if err != nil {
-		serverErr(w, err)
-		return
-	}
-	defer rows.Close()
-	out := []terminalOut{}
-	for rows.Next() {
-		var t terminalOut
-		var a *int16
-		if err := rows.Scan(&t.ID, &t.Local, &t.Rol, &a, &t.Modo); err != nil {
-			serverErr(w, err)
-			return
-		}
-		if a != nil {
-			t.A = attrLabel(int(*a))
-		}
-		out = append(out, t)
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "terminals": out})
-}
-
-// patchTerminal: PATCH /api/terminals/{id} {modo?, a?}. Cambia el modo (el gateway lo lee en /api/terminal/config).
-func (s *Server) patchTerminal(w http.ResponseWriter, r *http.Request) {
-	id, ok := atoi(chi.URLParam(r, "id"))
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "id inválido")
-		return
-	}
-	var in struct {
-		Modo *string `json:"modo"`
-		A    *string `json:"a"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	if in.Modo != nil {
-		switch *in.Modo {
-		case "verificar", "emergencia", "emitir", "vincular":
-		default:
-			writeErr(w, http.StatusBadRequest, "modo inválido")
-			return
-		}
-	}
-	var attr *int
-	clearAttr := false
-	if in.A != nil {
-		if *in.A == "" {
-			clearAttr = true
-		} else if n, ok := parseAttr(*in.A); ok {
-			attr = &n
-		} else {
-			writeErr(w, http.StatusBadRequest, "atributo inválido")
-			return
-		}
-	}
-	tag, err := s.DB.Exec(r.Context(),
-		`UPDATE terminals SET modo = coalesce($2, modo), attribute = CASE WHEN $4 THEN NULL ELSE coalesce($3, attribute) END WHERE id = $1`,
-		id, in.Modo, attr, clearAttr)
-	if err != nil {
-		serverErr(w, err)
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		writeErr(w, http.StatusNotFound, "terminal no encontrado")
-		return
-	}
-	s.listTerminals(w, r)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dispositivos": len(devs), "estado": "Carnet emitido"})
 }

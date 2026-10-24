@@ -42,31 +42,49 @@ func (s *Server) revocations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"hs": hs})
 }
 
-// revoke revoca una cédula y borra sus credenciales de billetera.
-// La puede pedir un emisor o el dueño de la cédula.
+// revoke revoca cédulas y borra sus credenciales de billetera. Con {h} una cédula concreta; sin h, todas
+// las activas de la cuenta (el emisor indica {ciudadanoId}). Lo puede pedir un emisor o el dueño.
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		H string `json:"h"`
+		H           string `json:"h"`
+		CiudadanoID int64  `json:"ciudadanoId"`
 	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	handle, err := parseHandle(in.H)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+	if !readOptionalJSON(w, r, &in) {
 		return
 	}
 	u := userFrom(r.Context())
-	ok, err := s.Revoke(r.Context(), handle, u.Role == "emisor", u.ID)
+	if in.H != "" {
+		handle, err := parseHandle(in.H)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ok, err := s.Revoke(r.Context(), handle, u.Role == "emisor", u.ID)
+		if err != nil {
+			serverErr(w, err)
+			return
+		}
+		if !ok {
+			writeErr(w, http.StatusNotFound, "cédula activa no encontrada")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	target, ok := s.targetCitizen(w, u, in.CiudadanoID)
+	if !ok {
+		return
+	}
+	n, err := s.RevokeCitizen(r.Context(), target)
 	if err != nil {
 		serverErr(w, err)
 		return
 	}
-	if !ok {
-		writeErr(w, http.StatusNotFound, "cédula activa no encontrada")
+	if n == 0 {
+		writeErr(w, http.StatusNotFound, "no hay cédulas activas")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "cedulas": n})
 }
 
 // Revoke marca la cédula como revocada. Si anyOwner es falso, solo se revoca si pertenece a citizenID.
