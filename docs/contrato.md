@@ -72,7 +72,7 @@ El lector se reinicia al abrir el puerto, así que el gateway espera el primer `
 | `HB` | Lector → PIC | Cambia de estado cada 5 s. Si pasan 10 s sin cambios, se bloquea |
 | `BLOQ` | PIC → lector | Entrada con `INPUT_PULLUP`. BAJO = normal, ALTO = bloqueado |
 
-Con `BLOQ` en ALTO, el lector pone sus pines SPI hacia el PN532 como entrada, envía `tamper` y muestra el bloqueo. Detalle de pines: [`firmware/pic/docs/pines-pic.md`](../firmware/pic/docs/pines-pic.md).
+Con `BLOQ` en ALTO, el lector pone como entrada sus pines hacia el RC522 (SPI y RST), envía `tamper` y muestra el bloqueo. Detalle de pines: [`firmware/pic/docs/pines-pic.md`](../firmware/pic/docs/pines-pic.md).
 
 ## 3. Lector → pantalla del comercio (UNO)
 

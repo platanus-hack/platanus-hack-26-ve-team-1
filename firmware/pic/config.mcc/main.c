@@ -136,7 +136,7 @@ int main(void)
 
         if (bloqueado)
         {
-            HAB_LECTOR_SetLow();    // PN532 sin VCC
+            HAB_LECTOR_SetLow();    // RC522 sin VCC
             LED0_SetLow();          // LED0 activo en BAJO
         }
         else
