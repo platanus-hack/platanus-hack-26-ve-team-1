@@ -50,3 +50,6 @@ desktop.ini
 # P4: binarios de tools/slj
 tools/slj/bin/
 tools/slj/slj.exe
+
+# graphify
+graphify-out/
