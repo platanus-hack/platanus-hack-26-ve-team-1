@@ -39,7 +39,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 
 ## 1. Lector ↔ gateway (serial USB)
 
-115200 baudios, **una línea JSON por mensaje** terminada en `\n`. Quien recibe hace `trim()` e ignora las líneas que no sean JSON válido. Mensajes del gateway: **máximo 60 bytes**, porque el lector tiene búfer chico.
+115200 baudios, **una línea JSON por mensaje** terminada en `\n`. Quien recibe hace `trim()` e ignora las líneas que no sean JSON válido. Mensajes del gateway: **máximo 128 bytes** por línea, incluido el `\n`. El búfer por defecto del ESP32 (256 bytes) alcanza; su `JsonDocument` debe poder guardar un mensaje de 128 bytes.
 
 **Lector → gateway:**
 
@@ -58,7 +58,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 | Mensaje | Cuándo |
 |-|-|
 | `{"t":"time","ts":1761300000}` | Al conectar y cada 60 s |
-| `{"t":"rev","hs":["…","…"],"more":true}` | Al conectar y cada 60 s. Máximo 2 handles por mensaje; `more:false` en el último *(confirmar: Manuela)* |
+| `{"t":"rev","hs":["…","…"],"more":true}` | Al conectar y cada 60 s. Máximo 5 handles por mensaje (~127 bytes); `more:false` en el último *(confirmar: Manuela)* |
 | `{"t":"cfg","rol":"…","a":"A1","modo":"verificar"}` | Al conectar y cuando cambie. `modo`: `verificar`, `emergencia`, `emitir` o `vincular` |
 | `{"t":"write","s":1,"b":0,"d":"<32 hex>"}` | Modo emitir, un bloque a la vez; espera el `ack` |
 | `{"t":"code","c":"123456"}` | Modo vincular |
