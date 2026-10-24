@@ -30,10 +30,12 @@ Cómo se comunican las piezas. Si cambias algo de aquí, actualiza este archivo 
 | `04` | Cédula vencida |
 | `05` | El terminal no tiene permiso para ese dato |
 | `06` | Rechazado por el ciudadano |
+| `07` | QR de la billetera caducado o ya usado *(propuesta de P4)* |
+| `08` | QR con formato inválido o emisor desconocido *(propuesta de P4)* |
 
 Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 
-**Atributo (`a`):** `A1` Mayor de 18 · `A2` Mayor de 21 · `A3` Identidad · `A4` Sangre y alergias · `A5` Contacto de emergencia · `A6` Donante y licencia.
+**Atributo (`a`):** `A1` Mayor de 18 · `A2` Mayor de 21 · `A3` Identidad · `A4` Sangre y alergias · `A5` Contacto de emergencia · `A6` Donante y licencia · `A7` Carnet universitario *(propuesta de P4; solo en la billetera)*.
 
 **Formatos:** `h` (handle) = 16 caracteres hex. `ts` = hora Unix en segundos. Todos los códigos van como string.
 

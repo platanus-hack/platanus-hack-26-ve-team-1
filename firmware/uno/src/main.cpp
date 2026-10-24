@@ -56,6 +56,7 @@ const __FlashStringHelper *nombreAtributo(const char *a)
     if (!strcmp(a, "A4")) return F("Sangre y alergias");
     if (!strcmp(a, "A5")) return F("Contacto de emergencia");
     if (!strcmp(a, "A6")) return F("Donante y licencia");
+    if (!strcmp(a, "A7")) return F("Carnet universitario");
     return F("Dato desconocido");
 }
 
@@ -67,6 +68,8 @@ const __FlashStringHelper *textoResultado(const char *res, bool emg)
     if (!strcmp(res, "04")) return F("C\x82" "dula vencida");
     if (!strcmp(res, "05")) return F("Sin permiso");
     if (!strcmp(res, "06")) return F("Rechazado por el titular");
+    if (!strcmp(res, "07")) return F("QR caducado o repetido");
+    if (!strcmp(res, "08")) return F("QR no reconocido");
     return F("Error de lectura");
 }
 
