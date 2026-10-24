@@ -202,4 +202,4 @@ Nunca incluye handles ni datos de personas. Los días van en hora de Venezuela.
 ### Datos de demo y retención
 
 - `go -C api run ./cmd/admin demo [-ana +58.. -luis +58.. -maria +58..]` siembra o restaura: cuentas `emisor@`, `comercio@`, `ana@`, `luis@`, `maria@slj.test` (misma contraseña) y los terminales Registro (emitir), Bar La Esquina (A1), Clinica Salud (A4), Ambulancia 1 (emergencia) y Transito (A6). Borra cédulas, credenciales, eventos y solicitudes de las cuentas demo y deja los modos en su valor inicial. La contraseña y los tokens quedan en `secrets/demo.json` y no cambian entre restauraciones.
-- `cmd/retention` borra eventos de más de 30 días (`RETENTION_DAYS`), códigos vencidos y solicitudes viejas. Va como Cron Job en Render.
+- `cmd/retention` borra eventos de más de 30 días (`RETENTION_DAYS`), códigos vencidos y solicitudes viejas. Se ejecuta a mano (`go -C api run ./cmd/retention`) o, si hace falta, como Cron Job en Render.

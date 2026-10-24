@@ -31,20 +31,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://slj-api.onrender.com/api/*
+        destination: https://hackathonplatanusvenezuela2026.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
-
-  - type: cron
-    name: slj-retention
-    runtime: go
-    rootDir: api
-    schedule: "0 7 * * *"
-    buildCommand: go build -o retention ./cmd/retention
-    startCommand: ./retention
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: RETENTION_DAYS
-        value: "30"
