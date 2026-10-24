@@ -131,6 +131,29 @@ Todo lo siguiente es un **supuesto del frontend**, pendiente de confirmar con P1
   5. **Confirmar que `GET /api/citizens` devuelve únicamente** `id` (interno), `nombre`, `email`, `estadoCedula` y `emitidaEn`, **sin handle ni UID**.
 - El frontend tolera hasta 3 errores HTTP seguidos en `GET /api/emision/status` antes de marcar fallo; una respuesta correcta reinicia la cuenta. Si el emisor cierra el panel con la emisión pendiente (tras confirmar), el frontend solo deja de consultar: **no cancela** la orden en el servidor (no hay endpoint de cancelación).
 
+## Panel del emisor, pestaña "Universidad": endpoints supuestos
+
+Supuestos del frontend, pendientes de confirmar con P1 (rutas en `UNIVERSITY_ENDPOINTS`, `api/university.ts`). Ambos exigen rol `emisor`. El frontend solo muestra la UI y hace la llamada: no hay lógica criptográfica en el cliente.
+
+| Método | Ruta (con `/api`) | Cuerpo | Respuesta esperada |
+|--------|-------------------|--------|--------------------|
+| `GET` | `/api/students` | — | `200` con una lista de `Student` (ver abajo). |
+| `POST` | `/api/credentials/university` | `{ "estudianteId": "u-123" }` | `2xx`. Tras el éxito el frontend vuelve a pedir la lista. Un `409` se muestra como "ya tiene carnet". |
+
+```json
+{
+  "id": "u-123",
+  "nombre": "Ana Pérez",
+  "email": "ana@sisa.demo",
+  "estadoCarnet": "sin_carnet",
+  "emitidoEn": null
+}
+```
+
+- `estadoCarnet`: `"sin_carnet"` o `"emitido"` (en este caso `emitidoEn` es una fecha ISO 8601).
+- `id` es interno: el frontend lo usa solo para llamar a la API y nunca lo muestra (tampoco handles ni UID).
+- Preguntas abiertas: ¿el `POST` devuelve el carnet emitido o solo `2xx`? ¿Un estudiante con carnet emitido puede volver a recibir uno (re-emisión)? El frontend hoy no ofrece esa acción.
+
 ## Forma JSON de `CardInfo`
 
 ```json

@@ -102,6 +102,18 @@ export type NotificationSettings = {
   avisosActivados: boolean
 }
 
+export type StudentCredentialStatus = 'sin_carnet' | 'emitido'
+
+/** Estudiante tal como lo ve el emisor. `id` es interno: nunca se muestra. */
+export type Student = {
+  id: string
+  nombre: string
+  email: string
+  estadoCarnet: StudentCredentialStatus
+  /** Fecha de emisión en ISO 8601; null si aún no tiene carnet. */
+  emitidoEn: string | null
+}
+
 export type LoginInput = {
   email: string
   password: string

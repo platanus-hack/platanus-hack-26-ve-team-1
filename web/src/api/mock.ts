@@ -9,6 +9,7 @@ import type {
   NotificationSettings,
   OptionalData,
   RegisterInput,
+  Student,
   Terminal,
   User,
 } from './types'
@@ -462,6 +463,48 @@ export async function mockGetCitizens(): Promise<Citizen[]> {
 }
 
 const MOCK_EMISSION_DURATION_MS = 7000
+
+// Carnets universitarios del mock: Luis ya tiene uno; el resto se emite en sessionStorage.
+const MOCK_STUDENT_BASE_ISSUED: Record<string, string> = {
+  'u-luis': '2026-06-01T12:00:00Z',
+}
+
+function studentKey(studentId: string): string {
+  return `sisa:mock-student:${studentId}`
+}
+
+function studentIssuedAt(studentId: string): string | null {
+  return sessionStorage.getItem(studentKey(studentId)) ?? MOCK_STUDENT_BASE_ISSUED[studentId] ?? null
+}
+
+export async function mockGetStudents(): Promise<Student[]> {
+  await delay()
+  requireEmisor()
+  return demoAccounts
+    .filter((account) => account.rol === ROLES.CIUDADANO)
+    .map(({ id, nombre, email }) => {
+      const emitidoEn = studentIssuedAt(id)
+      return {
+        id,
+        nombre,
+        email,
+        estadoCarnet: emitidoEn ? 'emitido' : 'sin_carnet',
+        emitidoEn,
+      }
+    })
+}
+
+export async function mockIssueUniversityCredential(studentId: string): Promise<void> {
+  await delay()
+  requireEmisor()
+  if (!demoAccounts.some((account) => account.id === studentId)) {
+    throw new ApiError(404, 'No encontramos a ese estudiante.')
+  }
+  if (studentIssuedAt(studentId)) {
+    throw new ApiError(409, 'Ese estudiante ya tiene un carnet universitario.')
+  }
+  sessionStorage.setItem(studentKey(studentId), new Date().toISOString())
+}
 
 let mockEmission: { citizenId: string; startedAt: number } | null = null
 
