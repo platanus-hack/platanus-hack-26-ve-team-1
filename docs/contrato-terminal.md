@@ -2,7 +2,9 @@
 
 Cómo se comunican las piezas. Si cambias algo de aquí, actualiza este archivo y avisa a los dueños de ambos lados.
 
-**Estado:** borrador. Lo marcado *(confirmar)* espera el visto bueno del responsable indicado.
+**Estado:** borrador. Lo marcado *(confirmar)* espera el visto bueno del responsable indicado. El enlace 4 (gateway ↔ API) está confirmado por Samuel.
+
+Los bytes de la cédula, la firma y el QR están en [`contrato.md`](contrato.md).
 
 ```
 [Backend / API] <── HTTPS ──> [Gateway (laptop)] <── USB serial ──> [Lector ESP32]
@@ -39,7 +41,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 
 ## 1. Lector ↔ gateway (serial USB)
 
-115200 baudios, **una línea JSON por mensaje** terminada en `\n`. Quien recibe hace `trim()` e ignora las líneas que no sean JSON válido. Mensajes del gateway: **máximo 128 bytes** por línea, incluido el `\n`. El búfer por defecto del ESP32 (256 bytes) alcanza; su `JsonDocument` debe poder guardar un mensaje de 128 bytes.
+115200 baudios, **una línea JSON por mensaje** terminada en `\n`. Quien recibe hace `trim()` e ignora las líneas que no sean JSON válido. Mensajes del gateway: **máximo 120 bytes** por línea (con `\n`); el lector necesita un búfer de recepción de 128 B. El peor caso, `rev` con 2 handles y `more:false`, mide 71 B.
 
 **Lector → gateway:**
 
@@ -58,7 +60,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 | Mensaje | Cuándo |
 |-|-|
 | `{"t":"time","ts":1761300000}` | Al conectar y cada 60 s |
-| `{"t":"rev","hs":["…","…"],"more":true}` | Al conectar y cada 60 s. Máximo 5 handles por mensaje (~127 bytes); `more:false` en el último *(confirmar: Manuela)* |
+| `{"t":"rev","hs":["…","…"],"more":true}` | Al conectar y cada 60 s. Máximo 2 handles por mensaje; `more:false` en el último *(confirmar: Manuela)* |
 | `{"t":"cfg","rol":"…","a":"A1","modo":"verificar"}` | Al conectar y cuando cambie. `modo`: `verificar`, `emergencia`, `emitir` o `vincular` |
 | `{"t":"write","s":1,"b":0,"d":"<32 hex>"}` | Modo emitir, un bloque a la vez; espera el `ack` |
 | `{"t":"code","c":"123456"}` | Modo vincular |
@@ -86,7 +88,7 @@ Un solo cable: TX del lector → **pin 0 (RX) del UNO**, más GND común. 9600 b
 
 La pantalla nunca recibe datos personales, solo códigos.
 
-## 4. Gateway ↔ API *(confirmar: Samuel)*
+## 4. Gateway ↔ API *(confirmado: Samuel)*
 
 Cabecera `Authorization: Bearer <TERMINAL_TOKEN>`. Respuestas en JSON.
 
@@ -99,3 +101,12 @@ Cabecera `Authorization: Bearer <TERMINAL_TOKEN>`. Respuestas en JSON.
 | `POST /api/link/start` | `{"h":"…"}` | `{"c":"123456"}` |
 
 El gateway guarda cada evento en una cola local antes de enviarlo y reintenta si la API falla.
+
+Notas de la API:
+
+- El terminal se identifica por el token (se guarda su SHA-256 en `terminals.token_hash`). El campo `terminal` del body se ignora.
+- `a` y `res` llegan como string (`"A1"`, `"01"`) y se guardan como número 1–6.
+- `ts` se acepta si está dentro de un margen razonable de la hora del servidor; si no, se usa la hora del servidor.
+- `tamper` se guarda como evento con `kind = 'tamper'`, sin handle, atributo ni resultado.
+- `modo` sale de `terminals.modo`; `a` es `""` si el terminal no pide un atributo concreto.
+- `POST /api/emision/start` firma todos los atributos registrados para el ciudadano y devuelve el índice (sector 1) y los bloques de cada atributo ya partidos en `{s,b,d}`.

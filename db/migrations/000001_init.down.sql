@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS link_codes;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS terminals;
+DROP TABLE IF EXISTS wallet_credentials;
+DROP TABLE IF EXISTS devices;
+DROP TABLE IF EXISTS attributes;
+DROP TABLE IF EXISTS cards;
+DROP TABLE IF EXISTS citizens;
