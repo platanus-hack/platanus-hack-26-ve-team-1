@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
   ATTR, concat, encodePresentation, encodeUnsigned, parseCredential, parsePresentation, parseRevocations,
   revocationsFromHex, toB64u,
-} from "./index.ts";
-import { HANDLE, makeWorld, NOW } from "./test/helpers.ts";
+} from "../../src/lib/slj/index.ts";
+import { HANDLE, makeWorld, NOW } from "./helpers/helpers.ts";
 
 const sig64 = new Uint8Array(64).fill(7);
 const devpub = Uint8Array.from({ length: 33 }, (_, i) => (i === 0 ? 2 : i));

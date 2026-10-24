@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { concat, fromB64u, fromHex, readU32, readU64, toB64u, toHex, u32 } from "./bytes.ts";
-import { withoutNativeBase64 } from "./test/helpers.ts";
+import { concat, fromB64u, fromHex, readU32, readU64, toB64u, toHex, u32 } from "../../src/lib/slj/bytes.ts";
+import { withoutNativeBase64 } from "./helpers/helpers.ts";
 
 const samples = [
   new Uint8Array(0),

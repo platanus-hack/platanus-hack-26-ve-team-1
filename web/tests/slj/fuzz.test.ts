@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RESULT, fromB64u, toB64u, verifyPresentation } from "./index.ts";
-import { makeWorld, rng } from "./test/helpers.ts";
+import { RESULT, fromB64u, toB64u, verifyPresentation } from "../../src/lib/slj/index.ts";
+import { makeWorld, rng } from "./helpers/helpers.ts";
 
 test("fuzz: ninguna mutación del QR válido da aprobado ni lanza (3000 casos, semilla fija)", async () => {
   const w = await makeWorld();

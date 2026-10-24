@@ -35,9 +35,9 @@ func TestVectorsRoundTrip(t *testing.T) {
 	}
 }
 
-// Presentación firmada por WebCrypto (la escribe `node --test app/lib/slj/slj.test.ts`).
+// Presentación firmada por WebCrypto (la escribe `node --test web/tests/slj/conformance.test.ts`).
 func TestVerifyTSPresentation(t *testing.T) {
-	b, err := os.ReadFile("../../app/lib/slj/testdata/ts-presentation.json")
+	b, err := os.ReadFile("../../web/tests/slj/testdata/ts-presentation.json")
 	if err != nil {
 		t.Skip("falta ts-presentation.json; corre los tests de TS primero")
 	}

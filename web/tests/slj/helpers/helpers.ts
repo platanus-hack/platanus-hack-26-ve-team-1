@@ -1,7 +1,7 @@
 import {
   ATTR, ISSUER, concat, createPresentation, decompressPoint, encodeUnsigned, exportCompressed,
   generateDeviceKey, importIssuers, sign, type VerifyContext,
-} from "../index.ts";
+} from "../../../src/lib/slj/index.ts";
 
 export const NOW = 1_800_000_000;
 export const HANDLE = 0x1122334455667788n;

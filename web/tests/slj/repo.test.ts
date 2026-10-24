@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import vm from "node:vm";
-import { RESULT, ROTATE_SECONDS, WINDOW_SECONDS } from "./index.ts";
+import { RESULT, ROTATE_SECONDS, WINDOW_SECONDS } from "../../src/lib/slj/index.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
@@ -39,7 +39,7 @@ test("docs/p4-qr.md documenta los códigos del contrato, los internos 07/08 y lo
 });
 
 test("07 y 08 nunca salen del verificador: la API y el UNO solo conocen 01–06", async () => {
-  const { toVerifEvent } = await import("./index.ts");
+  const { toVerifEvent } = await import("../../src/lib/slj/index.ts");
   for (const code of [RESULT.STALE, RESULT.BAD_FORMAT, RESULT.BAD_SIG]) {
     assert.equal(toVerifEvent({ code, handle: 1n, attr: 1 }, 1), null, `código ${code}`);
   }
@@ -47,7 +47,7 @@ test("07 y 08 nunca salen del verificador: la API y el UNO solo conocen 01–06"
 
 test("el núcleo no tiene dependencias externas", () => {
   for (const f of ["bytes", "codec", "p256", "present", "verify", "store", "tables", "index"]) {
-    for (const m of read(`app/lib/slj/${f}.ts`).matchAll(/from\s+"([^"]+)"/g)) {
+    for (const m of read(`web/src/lib/slj/${f}.ts`).matchAll(/from\s+"([^"]+)"/g)) {
       assert.ok(m[1].startsWith("./"), `${f}.ts importa "${m[1]}"`);
     }
   }

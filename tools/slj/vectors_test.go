@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const vectorsPath = "../../app/lib/slj/testdata/vectors.json"
+const vectorsPath = "../../web/tests/slj/testdata/vectors.json"
 
 // El archivo versionado no puede quedar viejo respecto al generador: mismas claves, mismos casos y códigos.
 // (Las firmas ECDSA son aleatorias, así que se compara la estructura y no los bytes.)

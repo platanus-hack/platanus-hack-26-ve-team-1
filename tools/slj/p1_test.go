@@ -14,8 +14,8 @@ import (
 )
 
 // Conformidad con el contrato REAL de P1: sus credenciales de billetera de prueba, sus emisores (JWK) y su
-// celular de prueba (clave privada publicada en su repo). Fixtures copiados a app/lib/slj/testdata/p1-*.json.
-const fixtures = "../../app/lib/slj/testdata/"
+// celular de prueba (clave privada publicada en su repo). Fixtures copiados a web/tests/slj/testdata/p1-*.json.
+const fixtures = "../../web/tests/slj/testdata/"
 
 type p1Creds struct {
 	Credentials []struct {

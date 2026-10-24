@@ -1,8 +1,8 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { createFakeIDB } from "./test/fake-idb.ts";
-import { exportCompressed, generateDeviceKey } from "./index.ts";
-import * as store from "./store.ts";
+import { createFakeIDB } from "./helpers/fake-idb.ts";
+import { exportCompressed, generateDeviceKey } from "../../src/lib/slj/index.ts";
+import * as store from "../../src/lib/slj/store.ts";
 
 const fake = createFakeIDB();
 (globalThis as any).indexedDB = fake.indexedDB;

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { verifyPresentation } from "./index.ts";
-import { makeWorld } from "./test/helpers.ts";
+import { verifyPresentation } from "../../src/lib/slj/index.ts";
+import { makeWorld } from "./helpers/helpers.ts";
 
 test("rendimiento: verificar un QR toma menos de 25 ms y el QR no pasa de 249 caracteres", async () => {
   const w = await makeWorld();

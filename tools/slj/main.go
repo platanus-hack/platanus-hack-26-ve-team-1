@@ -49,7 +49,7 @@ func usage() {
 
 func cmdVectors(args []string) error {
 	fs := flag.NewFlagSet("vectors", flag.ExitOnError)
-	out := fs.String("out", "app/lib/slj/testdata/vectors.json", "archivo de salida")
+	out := fs.String("out", "web/tests/slj/testdata/vectors.json", "archivo de salida")
 	fs.Parse(args)
 	if err := writeVectors(*out); err != nil {
 		return err

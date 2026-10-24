@@ -1,10 +1,10 @@
 // Escenarios de la demo (roadmap de P5) de punta a punta: emisión → QR → verificación sin red → outbox.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ATTR, ISSUER, RESULT, ROTATE_SECONDS, attrLabel, fromB64u, parseRevocations, toB64u, verifyPresentation } from "./index.ts";
-import { HANDLE, makeWorld, noNetwork, NOW } from "./test/helpers.ts";
-import { createFakeIDB } from "./test/fake-idb.ts";
-import * as store from "./store.ts";
+import { ATTR, ISSUER, RESULT, ROTATE_SECONDS, attrLabel, fromB64u, parseRevocations, toB64u, verifyPresentation } from "../../src/lib/slj/index.ts";
+import { HANDLE, makeWorld, noNetwork, NOW } from "./helpers/helpers.ts";
+import { createFakeIDB } from "./helpers/fake-idb.ts";
+import * as store from "../../src/lib/slj/store.ts";
 
 const bar = new Set<number>([ATTR.MAYOR18, ATTR.MAYOR21]);
 const code = async (qr: string, ctx: Parameters<typeof verifyPresentation>[1]) => (await verifyPresentation(qr, ctx)).code;

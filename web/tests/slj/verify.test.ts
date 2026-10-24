@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ATTR, ISSUER, RESULT, WINDOW_SECONDS, fromB64u, toB64u, verifyPresentation, type VerifyContext,
-} from "./index.ts";
-import { HANDLE, makeWorld, NOW, offCurveKey } from "./test/helpers.ts";
+} from "../../src/lib/slj/index.ts";
+import { HANDLE, makeWorld, NOW, offCurveKey } from "./helpers/helpers.ts";
 
 const code = async (qr: string, ctx: VerifyContext) => (await verifyPresentation(qr, ctx)).code;
 

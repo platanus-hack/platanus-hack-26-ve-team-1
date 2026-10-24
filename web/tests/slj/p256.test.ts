@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   compressPoint, decompressPoint, exportCompressed, generateDeviceKey, importIssuers, importPublicAny,
-} from "./index.ts";
-import { issuerPair, offCurveKey } from "./test/helpers.ts";
+} from "../../src/lib/slj/index.ts";
+import { issuerPair, offCurveKey } from "./helpers/helpers.ts";
 
 test("compress/decompress: ida y vuelta con ambas paridades de y", async () => {
   const seen = new Set<number>();

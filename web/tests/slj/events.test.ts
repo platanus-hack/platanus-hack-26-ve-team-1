@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ATTR, ISSUER, RESULT, attrLabel, toVerifEvent, verifyPresentation } from "./index.ts";
-import { HANDLE, makeWorld, NOW } from "./test/helpers.ts";
+import { ATTR, ISSUER, RESULT, attrLabel, toVerifEvent, verifyPresentation } from "../../src/lib/slj/index.ts";
+import { HANDLE, makeWorld, NOW } from "./helpers/helpers.ts";
 
 const run = async (w: Awaited<ReturnType<typeof makeWorld>>, over = {}, ctx = {}) => {
   const r = await verifyPresentation(await w.present(await w.issue(over)), w.ctx(ctx));

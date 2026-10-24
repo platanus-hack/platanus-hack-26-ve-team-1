@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import {
   ATTR, ISSUER, RESULT, createPresentation, fromB64u, fromHex, importIssuersJwk, parseCredential, toB64u,
   toVerifEvent, verifyPresentation,
-} from "./index.ts";
+} from "../../src/lib/slj/index.ts";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "testdata");
 const load = (f: string) => JSON.parse(readFileSync(join(dir, f), "utf8"));

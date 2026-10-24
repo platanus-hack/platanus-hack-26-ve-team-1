@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ISSUER, RESULT, fromHex, importIssuers, toHex, verifyPresentation, type VerifyContext } from "./index.ts";
-import { makeWorld, NOW } from "./test/helpers.ts";
+import { ISSUER, RESULT, fromHex, importIssuers, toHex, verifyPresentation, type VerifyContext } from "../../src/lib/slj/index.ts";
+import { makeWorld, NOW } from "./helpers/helpers.ts";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "testdata");
 
