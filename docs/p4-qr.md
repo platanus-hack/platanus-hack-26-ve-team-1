@@ -36,7 +36,7 @@ El verificador comprueba, en este orden y cortando en el primer fallo:
 5. El handle no está en la lista de revocación (03).
 6. El emisor es conocido (08).
 7. Las dos firmas, en paralelo: emisor sobre la credencial y celular sobre `t ‖ cred` (02).
-8. La pareja `(handle, t)` no se había visto ya (07). Se registra solo después de validar las firmas.
+8. La terna `(handle, attr, t)` no se había visto ya (07). Se registra solo después de validar las firmas.
 
 El QR se renueva cada **20 s**, así que una captura deja de servir antes de 30 s y quedan 10 s de margen para el desfase de reloj y el escaneo.
 

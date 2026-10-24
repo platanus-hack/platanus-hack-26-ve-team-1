@@ -1,0 +1,60 @@
+# P4 · Pruebas
+
+## Cómo correrlas
+
+```bash
+node --test "app/lib/slj/**/*.test.ts"          # 59 pruebas del núcleo (Node 26, sin dependencias)
+cd tools/slj && go vet ./... && go test ./...   # CLI Go: códec, vectores, CLI como subproceso
+cd tools/slj && go test -run xxx -fuzz=FuzzVerifyPresentation -fuzztime=30s
+cd tools/slj && go run . vectors -out ../../app/lib/slj/testdata/vectors.json   # regenera vectores y corre ambos lados de nuevo
+```
+
+CI: `.github/workflows/p4.yml` (solo se dispara si cambian rutas de P4). El job `conformance` regenera los vectores y la presentación de WebCrypto y las verifica en ambos sentidos.
+
+## Mapa de cobertura
+
+Salió del grafo de graphify (comunidades por módulo); cada comunidad de código tiene su archivo de pruebas.
+
+| Comunidad del grafo | Archivos | Pruebas |
+| :---- | :---- | :---- |
+| Utilidades binarias | `bytes.ts` | `bytes.test.ts`: base64url por la ruta nativa y por la de respaldo, hex, `subarray` con `byteOffset ≠ 0` |
+| Códec | `codec.ts` | `codec.test.ts`: credencial de chip y de billetera, largos 0/1/64/255, ±1 byte, presentación, revocaciones |
+| P-256 | `p256.ts` | `p256.test.ts`: compresión con ambas paridades, puntos fuera de la curva, llave no extraíble |
+| Verificación | `verify.ts`, `present.ts` | `verify.test.ts`: todos los códigos, bordes de hora y vencimiento, precedencias, anti-reuso |
+| Almacén IndexedDB | `store.ts` | `store.test.ts` sobre `test/fake-idb.ts`: llave única, blob de revocaciones, outbox concurrente y atómico, una sola conexión |
+| Flujo completo | todo el núcleo | `flow.test.ts`: escenarios de la demo y modo avión |
+| Robustez | `verify.ts` | `fuzz.test.ts` (3.000 mutaciones) y `FuzzVerifyPresentation` (Go) |
+| Go: tipos y códec | `slj.go` | `codec_test.go` |
+| Go: CLI y vectores | `main.go`, `vectors.go` | `cli_test.go`, `vectors_test.go` |
+| Despliegue | `render.yaml`, laboratorio | `repo.test.ts` |
+| Interoperabilidad | TS ↔ Go | `conformance.test.ts`, `TestVectorsRoundTrip`, `TestVerifyTSPresentation` |
+
+## Escenarios de la demo y código esperado
+
+| Escenario | Esperado |
+| :---- | :---- |
+| Ana (mayor de 18) en el bar | 01 |
+| Luis solo tiene carnet; el bar no lo acepta | 05 |
+| Carnet universitario en un verificador que lo acepta | 01 (emisor 2) |
+| María responde BLOQUEAR y llega la nueva lista | 03 |
+| Credencial alterada a mano | 02 |
+| Captura de pantalla a los 35 s | 07 |
+| Mismo QR escaneado dos veces | 07 |
+| QR rotando cada 20 s durante 2 minutos | 01 en todos |
+| Reloj del verificador +10 s / +31 s | 01 / 07 |
+| Modo avión | 01 sin llamar a `fetch`; el evento queda en el outbox |
+
+## Precedencia de códigos
+
+La verificación corta en el primer fallo, en este orden: formato (08) → hora (07) → vencimiento (04) → permiso (05) → revocación (03) → emisor conocido (08) → firmas (02) → reuso (07). Consecuencia deliberada: un QR falsificado con un handle revocado da 03 y no 02, porque la revocación es más barata de comprobar que dos firmas.
+
+## Defectos que encontró el análisis (corregidos en esta rama)
+
+1. **Outbox:** `pushOutbox` leía y escribía en transacciones distintas y `takeOutbox`+`clearOutbox` borraba lo llegado entre ambas. Ahora cada operación es una sola transacción (`drainOutbox` es atómico).
+2. **Conexiones:** `store.ts` abría IndexedDB en cada operación; ahora reutiliza una conexión.
+3. **Anti-reuso:** la clave de la caché era `handle:t`, así que dos atributos del mismo ciudadano en el mismo segundo daban un 07 falso. Ahora es `handle:attr:t`.
+
+## Lo que estas pruebas no cubren
+
+- IndexedDB, la cámara y WebCrypto en iPhone y Android reales: se validan a mano con `app/public/p4-lab` sobre HTTPS.
+- Las páginas `/billetera` y `/verificar` y el service worker: aún no existen (dependen del scaffold de P5).
