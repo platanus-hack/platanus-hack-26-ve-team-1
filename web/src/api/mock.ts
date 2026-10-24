@@ -2,7 +2,9 @@ import { ApiError, emitUnauthorized } from './client'
 import type {
   Attribute,
   CardInfo,
+  CardStatus,
   Citizen,
+  EmissionStatus,
   LoginInput,
   NotificationSettings,
   OptionalData,
@@ -11,6 +13,7 @@ import type {
   User,
 } from './types'
 import { EMPTY_OPTIONAL_DATA } from '../lib/optionalData'
+import { ROLES } from '../lib/roles'
 
 // Datos de demostración: las contraseñas en texto plano solo existen en el mock.
 type MockAccount = User & { password: string; edad: number }
@@ -102,15 +105,7 @@ export const mockCards: Record<string, CardInfo> = {
   },
 }
 
-export const mockCitizens: Citizen[] = demoAccounts
-  .filter((account) => account.rol === 'ciudadano')
-  .map(({ id, nombre, email, edad }) => ({
-    id,
-    nombre,
-    email,
-    edad,
-    cedula: mockCards[id]?.estado ?? 'revocada',
-  }))
+// Los estados iniciales salen de mockCards; los cambios (bloquear, emitir) se guardan por usuario.
 
 // Formato del backend: id numérico, atributo "A1"–"A6", resultado 1–6, emergencia booleana.
 type MockBackendEvent = {
@@ -232,13 +227,42 @@ function findUserById(id: string | null): User | undefined {
   return user && withNotificationOverride(user)
 }
 
-// Los cambios de WhatsApp y de bloqueo viven solo en sessionStorage (por usuario).
+// Los cambios de WhatsApp y de estado de la cédula viven solo en sessionStorage (por usuario).
 function notificationsKey(userId: string): string {
   return `sisa:mock-notifications:${userId}`
 }
 
-function revokedKey(userId: string): string {
-  return `sisa:mock-revoked:${userId}`
+/** Estado de la cédula tras bloquear o emitir; si no existe, vale el de mockCards. */
+type CardOverride = { estado: CardStatus; emitidaEn?: string }
+
+function cardOverrideKey(userId: string): string {
+  return `sisa:mock-card:${userId}`
+}
+
+function readCardOverride(userId: string): CardOverride | undefined {
+  try {
+    const raw = sessionStorage.getItem(cardOverrideKey(userId))
+    return raw ? (JSON.parse(raw) as CardOverride) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeCardOverride(userId: string, override: CardOverride): void {
+  sessionStorage.setItem(cardOverrideKey(userId), JSON.stringify(override))
+}
+
+/** Cédula vigente del usuario en el mock (base + cambios), o undefined si aún no tiene. */
+function currentCard(userId: string): CardInfo | undefined {
+  const base = mockCards[userId]
+  const override = readCardOverride(userId)
+  if (!override) return base
+  return {
+    id: base?.id ?? `c-${userId}`,
+    estado: override.estado,
+    emitidaEn: override.emitidaEn ?? base?.emitidaEn ?? new Date().toISOString(),
+    atributos: override.estado === 'activa' ? [...CHIP_ATTRIBUTES] : [],
+  }
 }
 
 function withNotificationOverride(user: User): User {
@@ -323,10 +347,9 @@ export async function mockGetCardInfo(): Promise<CardInfo> {
     emitUnauthorized()
     throw new ApiError(401, 'Tu sesión no es válida. Inicia sesión de nuevo.')
   }
-  const card = mockCards[user.id]
+  const card = currentCard(user.id)
   if (!card) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
-  const revoked = sessionStorage.getItem(revokedKey(user.id)) === '1'
-  return revoked ? { ...card, estado: 'revocada', atributos: [] } : card
+  return card
 }
 
 function requireSessionUser(): User {
@@ -396,11 +419,74 @@ export function mockOpenEventStream(handlers: {
   return () => clearTimeout(timer)
 }
 
-export async function mockRevokeCard(): Promise<void> {
-  await delay()
+function requireEmisor(): User {
   const user = requireSessionUser()
-  if (!mockCards[user.id]) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
-  sessionStorage.setItem(revokedKey(user.id), '1')
+  if (user.rol !== ROLES.EMISOR) {
+    throw new ApiError(403, 'No tienes permiso para hacer esto.')
+  }
+  return user
+}
+
+/** Sin `citizenId`, el ciudadano bloquea su propia cédula; con él, lo hace el emisor. */
+export async function mockRevokeCard(citizenId?: string): Promise<void> {
+  await delay()
+  let targetId: string
+  if (citizenId === undefined) {
+    targetId = requireSessionUser().id
+  } else {
+    requireEmisor()
+    targetId = citizenId
+  }
+  const card = currentCard(targetId)
+  if (!card) throw new ApiError(404, 'Ese ciudadano aún no tiene una cédula emitida.')
+  writeCardOverride(targetId, { estado: 'revocada', emitidaEn: card.emitidaEn })
+}
+
+export async function mockGetCitizens(): Promise<Citizen[]> {
+  await delay()
+  requireEmisor()
+  const citizens: User[] = [
+    ...demoAccounts.filter((account) => account.rol === ROLES.CIUDADANO).map(toUser),
+    ...loadRegisteredUsers().filter((user) => user.rol === ROLES.CIUDADANO),
+  ]
+  return citizens.map(({ id, nombre, email }) => {
+    const card = currentCard(id)
+    return {
+      id,
+      nombre,
+      email,
+      estadoCedula: card?.estado ?? 'sin_emitir',
+      emitidaEn: card?.emitidaEn ?? null,
+    }
+  })
+}
+
+const MOCK_EMISSION_DURATION_MS = 7000
+
+let mockEmission: { citizenId: string; startedAt: number } | null = null
+
+/** Inicia una emisión simulada: el terminal "lee" la tarjeta a los pocos segundos. */
+export async function mockOrderEmission(citizenId: string): Promise<void> {
+  await delay()
+  requireEmisor()
+  mockEmission = { citizenId, startedAt: Date.now() }
+}
+
+export async function mockGetEmissionStatus(): Promise<EmissionStatus> {
+  await delay()
+  requireEmisor()
+  if (!mockEmission) {
+    return { estado: 'error', mensaje: 'No hay una emisión en curso.' }
+  }
+  if (Date.now() - mockEmission.startedAt < MOCK_EMISSION_DURATION_MS) {
+    return { estado: 'pendiente' }
+  }
+  writeCardOverride(mockEmission.citizenId, {
+    estado: 'activa',
+    emitidaEn: new Date().toISOString(),
+  })
+  mockEmission = null
+  return { estado: 'completado' }
 }
 
 export async function mockSaveNotifications(

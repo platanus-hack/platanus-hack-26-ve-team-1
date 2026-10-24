@@ -64,13 +64,26 @@ export type Terminal = {
   token?: string
 }
 
-/** Ciudadano tal como lo ve el emisor. */
+/** Estado de la cédula de un ciudadano, visto por el emisor. */
+export type CitizenCardStatus = CardStatus | 'sin_emitir'
+
+/** Ciudadano tal como lo ve el emisor. `id` es interno: nunca se muestra. */
 export type Citizen = {
   id: string
   nombre: string
   email: string
-  edad: number
-  cedula: CardStatus
+  estadoCedula: CitizenCardStatus
+  /** Fecha de emisión en ISO 8601; null si aún no tiene cédula. */
+  emitidaEn: string | null
+}
+
+export type EmissionState = 'pendiente' | 'completado' | 'error'
+
+/** Estado de la emisión en curso en el terminal. */
+export type EmissionStatus = {
+  estado: EmissionState
+  /** Detalle en español cuando estado es "error". */
+  mensaje?: string
 }
 
 /** Datos opcionales que el ciudadano pide escribir en su chip. */

@@ -99,6 +99,38 @@ Endpoints que usa el frontend (rutas en `CARD_ENDPOINTS` y `NOTIFICATIONS_ENDPOI
 2. **Formato de teléfono**: ¿Kapso espera **E.164**? El frontend lo envía normalizado: `+` seguido de 8 a 15 dígitos, sin espacios ni guiones (p. ej. `+56912345678`).
 3. **`PUT /api/me/notifications`**: ¿confirmas el body `{ "telefono": "+56912345678", "avisosActivados": true }` (con `telefono: null` si no hay) y que responde `200` con **el mismo JSON** guardado?
 
+## Panel del emisor (`/emisor`): endpoints supuestos
+
+Todo lo siguiente es un **supuesto del frontend**, pendiente de confirmar con P1 (rutas en `ISSUER_ENDPOINTS`, `api/issuer.ts`, y `CARD_ENDPOINTS`, `api/card.ts`). Todos exigen rol `emisor`.
+
+| Método | Ruta (con `/api`) | Cuerpo | Respuesta esperada |
+|--------|-------------------|--------|--------------------|
+| `GET` | `/api/citizens` | — | `200` con una lista de `Citizen` (ver abajo). |
+| `POST` | `/api/emision/order` | `{ "ciudadanoId": "u-123" }` | `2xx`. Deja al terminal en modo emisión esperando una tarjeta virgen. |
+| `GET` | `/api/emision/status` | — | `200` con `{ "estado": "pendiente" \| "completado" \| "error", "mensaje"?: "..." }`: estado de la emisión en curso del emisor. |
+| `POST` | `/api/revoke` | `{ "ciudadanoId": "u-123" }` | `2xx`. El emisor revoca la cédula de otro ciudadano (distinto del bloqueo propio, que va sin cuerpo). |
+
+```json
+{
+  "id": "u-123",
+  "nombre": "Ana Pérez",
+  "email": "ana@sisa.demo",
+  "estadoCedula": "activa",
+  "emitidaEn": "2026-03-12T10:00:00Z"
+}
+```
+
+- `estadoCedula`: `"activa"`, `"revocada"` o `"sin_emitir"` (en ese caso `emitidaEn` es `null`).
+- `id` es interno: el frontend lo usa solo para llamar a la API y nunca lo muestra (tampoco handles ni UID).
+- El frontend consulta `GET /api/emision/status` cada **2 s** y se rinde a los **2 minutos** (muestra un error al emisor). Deja de consultar si el emisor cierra el panel.
+- Preguntas abiertas para P1:
+  1. ¿`POST /api/emision/order` devuelve un id de orden para consultar `?order=<id>`?
+  2. ¿La lista de ciudadanos admite paginación o búsqueda en servidor?
+  3. **¿Qué terminal atiende `POST /api/emision/order`?** Si hay varios terminales en modo emisión, ¿cómo se elige uno (por emisor, por sesión, por id de terminal)? El frontend no envía ningún id de terminal.
+  4. **Validación en servidor de `{ "ciudadanoId" }` en `POST /api/revoke`:** solo debe aceptarse si la sesión tiene rol `emisor`; un ciudadano que envíe ese campo debe recibir `403` (el ciudadano solo puede bloquear su propia cédula, sin cuerpo).
+  5. **Confirmar que `GET /api/citizens` devuelve únicamente** `id` (interno), `nombre`, `email`, `estadoCedula` y `emitidaEn`, **sin handle ni UID**.
+- El frontend tolera hasta 3 errores HTTP seguidos en `GET /api/emision/status` antes de marcar fallo; una respuesta correcta reinicia la cuenta. Si el emisor cierra el panel con la emisión pendiente (tras confirmar), el frontend solo deja de consultar: **no cancela** la orden en el servidor (no hay endpoint de cancelación).
+
 ## Forma JSON de `CardInfo`
 
 ```json

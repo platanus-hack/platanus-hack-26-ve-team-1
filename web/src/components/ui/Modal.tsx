@@ -30,6 +30,11 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       ref={dialogRef}
       aria-labelledby={titleId}
       onClose={onClose}
+      // Escape pasa por onClose para que quien usa el Modal decida si cerrar o pedir confirmación.
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
