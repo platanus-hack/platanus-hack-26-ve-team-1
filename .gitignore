@@ -51,6 +51,8 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.swp
+.vscode/
+firmware/**/.vscode/
 
 # Secretos y bases locales (SoloLoJusto)
 .env.local
