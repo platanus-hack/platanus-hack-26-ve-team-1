@@ -1,21 +1,33 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet } from 'react-router'
 import { Logo } from '../components/Logo'
 import { Button } from '../components/ui'
-import { useCurrentRole } from '../hooks/useCurrentRole'
+import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
 import { cn, focusRing } from '../lib/cn'
+import { getErrorMessage } from '../lib/errors'
 import { NAV_BY_ROLE } from '../lib/roles'
 
 export default function AppLayout() {
-  const role = useCurrentRole()
-  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+  const { toast } = useToast()
   const [menuOpen, setMenuOpen] = useState(false)
-  const items = NAV_BY_ROLE[role]
+  const [loggingOut, setLoggingOut] = useState(false)
+  const items = user ? NAV_BY_ROLE[user.rol] : []
 
-  // TODO: reemplazar por el cierre de sesión real cuando exista auth.
-  const handleLogout = () => {
+  // ProtectedRoute redirige a /login cuando el usuario queda en null.
+  const handleLogout = async () => {
     setMenuOpen(false)
-    navigate('/login')
+    setLoggingOut(true)
+    try {
+      await logout()
+    } catch (error) {
+      toast({
+        title: 'No se pudo cerrar la sesión en el servidor',
+        description: getErrorMessage(error),
+        variant: 'error',
+      })
+    }
   }
 
   return (
@@ -71,6 +83,7 @@ export default function AppLayout() {
             <Button
               variant="secondary"
               onClick={handleLogout}
+              loading={loggingOut}
               className="self-start md:self-auto"
             >
               Cerrar sesión

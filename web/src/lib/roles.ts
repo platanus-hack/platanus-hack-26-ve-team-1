@@ -1,6 +1,10 @@
-import type { Role } from '../api/types'
+export const ROLES = {
+  CIUDADANO: 'ciudadano',
+  EMISOR: 'emisor',
+  COMERCIO: 'comercio',
+} as const
 
-export type { Role }
+export type Role = (typeof ROLES)[keyof typeof ROLES]
 
 export type NavItem = {
   to: string
@@ -9,14 +13,16 @@ export type NavItem = {
 }
 
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
-  ciudadano: [
+  [ROLES.CIUDADANO]: [
     { to: '/', label: 'Inicio', end: true },
     { to: '/billetera', label: 'Billetera' },
   ],
-  emisor: [{ to: '/emisor', label: 'Panel del emisor' }],
-  comercio: [{ to: '/comercio', label: 'Terminales' }],
+  [ROLES.EMISOR]: [{ to: '/emisor', label: 'Panel del emisor' }],
+  [ROLES.COMERCIO]: [{ to: '/comercio', label: 'Terminales' }],
 }
 
-export function isRole(value: string | null): value is Role {
-  return value === 'ciudadano' || value === 'emisor' || value === 'comercio'
+export const HOME_BY_ROLE: Record<Role, string> = {
+  [ROLES.CIUDADANO]: '/',
+  [ROLES.EMISOR]: '/emisor',
+  [ROLES.COMERCIO]: '/comercio',
 }

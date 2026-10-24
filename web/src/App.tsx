@@ -1,5 +1,8 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
+import { AuthProvider } from './components/AuthProvider'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastProvider } from './components/ui'
+import { ROLES } from './lib/roles'
 import AppLayout from './layouts/AppLayout'
 import AuthLayout from './layouts/AuthLayout'
 import HomePage from './pages/HomePage'
@@ -16,21 +19,31 @@ function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="emisor" element={<IssuerPage />} />
-            <Route path="comercio" element={<MerchantPage />} />
-            <Route path="billetera" element={<WalletPage />} />
-            <Route path="verificar" element={<VerifyPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-          <Route element={<AuthLayout />}>
-            <Route path="login" element={<LoginPage />} />
-            <Route path="registro" element={<RegisterPage />} />
-          </Route>
-          <Route path="/ui-kit" element={<UiKitPage />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route element={<ProtectedRoute />}>
+              <Route element={<AppLayout />}>
+                <Route element={<ProtectedRoute roles={[ROLES.CIUDADANO]} />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="billetera" element={<WalletPage />} />
+                </Route>
+                <Route element={<ProtectedRoute roles={[ROLES.EMISOR]} />}>
+                  <Route path="emisor" element={<IssuerPage />} />
+                </Route>
+                <Route element={<ProtectedRoute roles={[ROLES.COMERCIO]} />}>
+                  <Route path="comercio" element={<MerchantPage />} />
+                </Route>
+                <Route path="verificar" element={<VerifyPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
+            </Route>
+            <Route element={<AuthLayout />}>
+              <Route path="login" element={<LoginPage />} />
+              <Route path="registro" element={<RegisterPage />} />
+            </Route>
+            <Route path="/ui-kit" element={<UiKitPage />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </ToastProvider>
   )
