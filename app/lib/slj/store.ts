@@ -3,13 +3,26 @@
 const DB = "slj";
 const STORE = "kv";
 
+// Una sola conexión por pestaña: abrir la base en cada operación es lento y nunca se cerraba.
+let conn: Promise<IDBDatabase> | null = null;
+
 function open(): Promise<IDBDatabase> {
-  return new Promise((res, rej) => {
+  return (conn ??= new Promise((res, rej) => {
     const r = indexedDB.open(DB, 1);
     r.onupgradeneeded = () => r.result.createObjectStore(STORE);
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
-  });
+    r.onsuccess = () => {
+      const db = r.result;
+      db.onversionchange = () => {
+        db.close();
+        conn = null;
+      };
+      res(db);
+    };
+    r.onerror = () => {
+      conn = null;
+      rej(r.error);
+    };
+  }));
 }
 
 async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -46,10 +59,36 @@ export async function getDeviceKeyPair(generate: () => Promise<CryptoKeyPair>): 
 export const saveRevocations = (b: Uint8Array) => kvSet("revocations", b);
 export const loadRevocations = () => kvGet<Uint8Array>("revocations");
 
-export async function pushOutbox(ev: unknown): Promise<void> {
-  const q = (await kvGet<unknown[]>("outbox")) ?? [];
-  q.push(ev);
-  await kvSet("outbox", q);
+/** Lee y modifica una clave dentro de UNA transacción de escritura: no hay carreras entre pestañas ni escaneos. */
+function update<T>(key: string, f: (cur: T | undefined) => { next: T | undefined; out: unknown }): Promise<any> {
+  return open().then(
+    (db) =>
+      new Promise((res, rej) => {
+        const t = db.transaction(STORE, "readwrite");
+        const s = t.objectStore(STORE);
+        let out: unknown;
+        const g = s.get(key);
+        g.onsuccess = () => {
+          const r = f(g.result as T | undefined);
+          out = r.out;
+          if (r.next === undefined) s.delete(key);
+          else s.put(r.next, key);
+        };
+        g.onerror = () => rej(g.error);
+        t.oncomplete = () => res(out);
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      }),
+  );
 }
+
+export const pushOutbox = (ev: unknown): Promise<void> =>
+  update<unknown[]>("outbox", (cur) => ({ next: [...(cur ?? []), ev], out: undefined }));
+
+/** Vacía el outbox de forma atómica: devuelve lo que había y lo borra, sin perder eventos concurrentes. */
+export const drainOutbox = (): Promise<unknown[]> =>
+  update<unknown[]>("outbox", (cur) => ({ next: undefined, out: cur ?? [] }));
+
+/** Solo lectura (p. ej. para mostrar cuántos eventos faltan por enviar). */
 export const takeOutbox = async () => ((await kvGet<unknown[]>("outbox")) ?? []) as unknown[];
 export const clearOutbox = () => kvDel("outbox");

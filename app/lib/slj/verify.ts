@@ -47,7 +47,7 @@ export async function verifyPresentation(qr: string, ctx: VerifyContext): Promis
   if (!okIssuer || !okDevice) return res(RESULT.BAD_SIG);
 
   if (ctx.seen) {
-    const key = `${cred.handle}:${t}`;
+    const key = `${cred.handle}:${cred.attr}:${t}`;
     if (ctx.seen.has(key)) return res(RESULT.STALE);
     ctx.seen.set(key, t);
     for (const [k, ts] of ctx.seen) if (ctx.now - ts > WINDOW_SECONDS * 2) ctx.seen.delete(k);
