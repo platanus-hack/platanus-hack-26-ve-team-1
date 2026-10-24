@@ -3,7 +3,7 @@ name: p4
 on:
   push:
     paths: &paths
-      - "app/lib/slj/**"
+      - "web/**"
       - "tools/slj/**"
       - "app/public/p4-lab/**"
       - "docs/p4-*.md"
@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "26"
-      - run: node --test "app/lib/slj/**/*.test.ts"
+      - run: node --test "web/tests/slj/**/*.test.ts"
 
   go:
     runs-on: ubuntu-latest
@@ -51,10 +51,34 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: tools/slj/go.mod
-      - run: go run . vectors -out ../../app/lib/slj/testdata/vectors.json
+      - run: go run . vectors -out ../../web/tests/slj/testdata/vectors.json
         working-directory: tools/slj
-      - run: node --test "app/lib/slj/conformance.test.ts"
+      - run: node --test "web/tests/slj/conformance.test.ts"
         env:
           SLJ_REGEN: "1"
       - run: go test -count=1 -run 'TestVectorsRoundTrip|TestVerifyTSPresentation|TestVectorsFileMatchesGenerator' ./...
         working-directory: tools/slj
+
+  # Lo que pide P5 antes de fusionar: lint y build sin errores con Node 22.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      # El emisor de demostración (con sus claves) no debe llegar al bundle de producción.
+      - name: El mock no está en producción
+        run: |
+          if grep -rlE 'LIC-B2|20-12345' dist; then
+            echo "El emisor de demostración llegó al bundle de producción"
+            exit 1
+          fi
