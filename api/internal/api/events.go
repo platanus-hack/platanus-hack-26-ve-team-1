@@ -133,13 +133,15 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "atributo o resultado inválido")
 			return
 		}
-		_, err = s.DB.Exec(r.Context(),
+		var eventID int64
+		err = s.DB.QueryRow(r.Context(),
 			`INSERT INTO events (kind, handle, terminal_id, attribute, result, emergency, created_at)
-			 VALUES ('verif', $1, $2, $3, $4, $5, $6)`, handle, term.ID, attr, res, in.Emg, at)
+			 VALUES ('verif', $1, $2, $3, $4, $5, $6) RETURNING id`, handle, term.ID, attr, res, in.Emg, at).Scan(&eventID)
 		if err != nil {
 			serverErr(w, err)
 			return
 		}
+		s.publishEvent(r.Context(), eventID, handle, term.Local, attr, res, in.Emg, at)
 		if res == 1 { // solo un acceso aprobado se avisa al ciudadano
 			s.notifyUse(handle, term.Local, attr, in.Emg, at)
 		}

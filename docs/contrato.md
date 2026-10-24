@@ -122,6 +122,8 @@ Los errores son `{"ok":false,"error":"..."}`. Binarios en hex (handle 16 caracte
 | `POST /api/link/start` | terminal en modo vincular | `{h}` → `{c}` (6 dígitos, 2 min) |
 | `POST /api/link/confirm` | sesión | `{code,public_key}` → `{credentials:[{a,blob_hex,expires}]}`; la cédula debe ser de esa cuenta |
 | `GET /api/wallet[?public_key=hex]` | sesión | `{credentials:[...]}` vigentes, de cédulas activas |
+| `GET /api/events[?limit=50&before=<id>]` | sesión | `{events:[{id,local,atributo,resultado,hora,emergencia}]}`, más recientes primero |
+| `GET /api/events/stream` | sesión | SSE: un evento `evento` por lectura nueva, con el mismo JSON; admite `Last-Event-ID` |
 | `POST /api/events` | terminal | `{t:"verif",h,a,res,ts,emg}` o `{t:"tamper",ts}` → `{ok}` |
 | `GET /api/revocations` | público | `{hs:[...]}` |
 | `GET /api/issuers` | público | `{"0x01":JWK,"0x02":JWK}` |
@@ -160,3 +162,16 @@ Variables: `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID`, `KAPSO_WEBHOOK_SECRET`. Tel
 Si el envío con botones falla, se manda el mismo texto con "Responde BLOQUEAR." Las lecturas con otro resultado (firma inválida, revocada, vencida, sin permiso, rechazada) no generan aviso. Las horas van en hora de Venezuela (UTC-4).
 
 **Webhook** `POST /api/webhooks/kapso` (evento `whatsapp.message.received`): se valida `X-Webhook-Signature` (HMAC-SHA256 hex del cuerpo crudo con `KAPSO_WEBHOOK_SECRET`); sin secreto configurado responde 503, con firma mala 401. Si quien escribe envía BLOQUEAR o toca el botón (`id = bloquear`), se revocan todas las cédulas activas de la cuenta con ese teléfono, se borran sus credenciales de billetera y se responde "Tu cédula fue bloqueada. Puedes reactivarla desde el portal." Cualquier otro mensaje se ignora. `X-Idempotency-Key` evita responder dos veces ante un reintento.
+
+### Historial del ciudadano
+
+`GET /api/events` y `GET /api/events/stream` devuelven solo los eventos de las cédulas de la cuenta con sesión, sin handle ni UID:
+
+```json
+{"id":42,"local":"Bar La Esquina","atributo":"A1","resultado":1,"hora":"2026-10-24T21:40:03Z","emergencia":false}
+```
+
+- `atributo`: `"A1"`..`"A6"`. `resultado`: número 1–6 (ver códigos de resultado). `hora`: RFC 3339 en UTC. `local`: nombre del terminal.
+- Solo lecturas (`verif`); las alarmas de manipulación no aparecen. Se incluyen todos los resultados, no solo los aprobados.
+- El stream envía solo lo nuevo; el historial se pide con `GET /api/events`. Con `Last-Event-ID` recupera lo perdido. Manda un latido cada 25 s y sondea cada 10 s como respaldo del `LISTEN/NOTIFY` de Postgres (canal `slj_events`).
+- Con `EventSource` basta la cookie de sesión del mismo origen.

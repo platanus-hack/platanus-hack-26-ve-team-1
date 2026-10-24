@@ -29,6 +29,7 @@ type Server struct {
 
 	wg   sync.WaitGroup
 	keys recentKeys
+	hub  hub
 }
 
 func (s *Server) now() time.Time {
@@ -56,6 +57,8 @@ func (s *Server) Routes(r chi.Router) {
 		r.Get("/api/wallet", s.wallet)
 		r.Post("/api/link/confirm", s.linkConfirm)
 		r.Post("/api/revoke", s.revoke)
+		r.Get("/api/events", s.listEvents)
+		r.Get("/api/events/stream", s.eventsStream)
 
 		r.Group(func(r chi.Router) {
 			r.Use(requireRole("emisor"))

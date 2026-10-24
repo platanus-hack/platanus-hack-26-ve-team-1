@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/kapso"
 	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/repoutil"
 	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/terminal"
 )
@@ -84,16 +85,22 @@ func main() {
 		pass := fs.String("password", "", "contraseña")
 		role := fs.String("role", "ciudadano", "ciudadano|emisor|comercio")
 		name := fs.String("name", "", "nombre")
+		phone := fs.String("whatsapp", "", "teléfono de WhatsApp (opcional)")
 		fs.Parse(args)
 		if *email == "" || len(*pass) < 8 {
 			log.Fatal("falta -email o -password (mínimo 8 caracteres)")
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(*pass), bcrypt.DefaultCost)
+		var ph *string
+		if p := kapso.NormalizePhone(*phone); p != "" {
+			ph = &p
+		}
 		var id int64
 		err := db.QueryRow(ctx,
-			`INSERT INTO citizens (email, password_hash, role, name) VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role, name = EXCLUDED.name
-			 RETURNING id`, strings.ToLower(*email), string(hash), *role, *name).Scan(&id)
+			`INSERT INTO citizens (email, password_hash, role, name, whatsapp_phone) VALUES ($1,$2,$3,$4,$5)
+			 ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role, name = EXCLUDED.name,
+			   whatsapp_phone = coalesce(EXCLUDED.whatsapp_phone, citizens.whatsapp_phone)
+			 RETURNING id`, strings.ToLower(*email), string(hash), *role, *name, ph).Scan(&id)
 		if err != nil {
 			log.Fatalf("no se pudo crear el usuario: %v", err)
 		}

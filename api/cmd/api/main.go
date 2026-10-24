@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -25,8 +27,11 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		db, err := pgxpool.New(context.Background(), url)
+		db, err := pgxpool.New(ctx, url)
 		if err != nil {
 			log.Fatalf("base de datos: %v", err)
 		}
@@ -63,6 +68,7 @@ func main() {
 			log.Print("aviso: KAPSO_WEBHOOK_SECRET vacío; el webhook de Kapso responderá 503")
 		}
 		srv.Routes(r)
+		srv.Start(ctx)
 		defer srv.Wait()
 	} else {
 		log.Print("DATABASE_URL vacío: solo /api/health")
