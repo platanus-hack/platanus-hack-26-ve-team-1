@@ -1,5 +1,6 @@
 import { ApiError, emitUnauthorized } from './client'
 import type {
+  Attribute,
   CardInfo,
   Citizen,
   EventItem,
@@ -16,6 +17,14 @@ const SESSION_KEY = 'sisa:mock-session'
 const REGISTERED_KEY = 'sisa:mock-registered'
 const MIN_PASSWORD_LENGTH = 8
 
+const CHIP_ATTRIBUTES: Attribute[] = [
+  'mayor_de_18',
+  'mayor_de_21',
+  'identidad',
+  'sangre_alergias',
+  'contacto_emergencia',
+  'donante_licencia',
+]
 const demoAccounts: MockAccount[] = [
   {
     id: 'u-ana',
@@ -74,14 +83,15 @@ export const mockCards: Record<string, CardInfo> = {
     id: 'c-ana',
     estado: 'activa',
     emitidaEn: '2026-03-12T10:00:00Z',
-    atributos: ['mayor_de_18', 'cedula_vigente'],
+    atributos: [...CHIP_ATTRIBUTES],
   },
   'u-luis': {
     id: 'c-luis',
     estado: 'activa',
     emitidaEn: '2026-05-02T09:30:00Z',
-    atributos: ['cedula_vigente'],
+    atributos: [...CHIP_ATTRIBUTES],
   },
+  // Una cédula revocada ya no expone ningún atributo.
   'u-maria': {
     id: 'c-maria',
     estado: 'revocada',
@@ -223,4 +233,16 @@ export async function mockGetMe(): Promise<User> {
     throw new ApiError(401, 'Tu sesión no es válida. Inicia sesión de nuevo.')
   }
   return user
+}
+
+export async function mockGetCardInfo(): Promise<CardInfo> {
+  await delay()
+  const user = findUserById(sessionStorage.getItem(SESSION_KEY))
+  if (!user) {
+    emitUnauthorized()
+    throw new ApiError(401, 'Tu sesión no es válida. Inicia sesión de nuevo.')
+  }
+  const card = mockCards[user.id]
+  if (!card) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
+  return card
 }

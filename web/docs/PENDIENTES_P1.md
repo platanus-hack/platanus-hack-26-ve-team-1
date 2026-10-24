@@ -10,8 +10,23 @@ Endpoints y formas JSON que el frontend de sIsA necesita y que **no están en el
 |--------|-------------------|-----|--------------------|
 | `GET` | `/api/me` | Restaurar la sesión al cargar la app. | `200` con un `User`; `401` si no hay sesión. |
 | `POST` | `/api/auth/logout` | Cerrar sesión (el backend debe borrar la cookie). | `204` sin cuerpo, o `200`. |
+| `GET` | `/api/card` | Cédula del usuario autenticado (portal ciudadano). Ruta en `CARD_ENDPOINTS` (`api/card.ts`). | `200` con un `CardInfo`; `404` si aún no tiene cédula. |
 
 Ya están en el contrato: `POST /api/auth/register` y `POST /api/auth/login` (ambos responden con un `User`).
+
+## Forma JSON de `CardInfo`
+
+```json
+{
+  "id": "c-ana",
+  "estado": "activa",
+  "emitidaEn": "2026-03-12T10:00:00Z",
+  "atributos": ["mayor_de_18", "mayor_de_21", "identidad", "sangre_alergias", "contacto_emergencia", "donante_licencia"]
+}
+```
+
+- `estado`: `"activa"` o `"revocada"`. Una cédula revocada devuelve `atributos: []`.
+- `atributos`: valores exactos (minúscula, con guion bajo) de la lista del ejemplo.
 
 ## Forma JSON de `User`
 

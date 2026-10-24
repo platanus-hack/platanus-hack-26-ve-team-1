@@ -3,7 +3,13 @@ import type { ROLES, Role } from '../lib/roles'
 /** Valores exactos del contrato con P1: 'ciudadano' | 'emisor' | 'comercio' (minúscula, sin tilde). */
 export type { Role }
 
-export type Attribute = 'mayor_de_18' | 'mayor_de_21' | 'cedula_vigente'
+export type Attribute =
+  | 'mayor_de_18'
+  | 'mayor_de_21'
+  | 'identidad'
+  | 'sangre_alergias'
+  | 'contacto_emergencia'
+  | 'donante_licencia'
 
 /**
  * Contrato JSON que el frontend espera del backend (P1) en register, login y GET /me:
