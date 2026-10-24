@@ -1,1 +1,1 @@
-Put your project description in markdown here. It will render under your project voting page. See as reference [Platanus Hack 26: Buenos Aires voting page](https://hack.platan.us/26-ar/vote).
+Sistema para identificación de individuos de manera segura y anónima, enviando los datos a un servidor que los almacena de manera cifrada y anónima, permitiendo la verificación de identidad sin comprometer la privacidad del usuario.
