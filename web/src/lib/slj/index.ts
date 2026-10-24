@@ -5,3 +5,5 @@ export * from "./p256.ts";
 export * from "./present.ts";
 export * from "./verify.ts";
 export * from "./events.ts";
+export * from "./wallet.ts";
+export * from "./qrPath.ts";

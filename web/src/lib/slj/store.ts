@@ -82,8 +82,11 @@ function update<T>(key: string, f: (cur: T | undefined) => { next: T | undefined
   );
 }
 
+/** Tope del outbox: sin red durante mucho tiempo se conservan los más recientes, no se llena el almacenamiento. */
+export const OUTBOX_MAX = 500;
+
 export const pushOutbox = (ev: unknown): Promise<void> =>
-  update<unknown[]>("outbox", (cur) => ({ next: [...(cur ?? []), ev], out: undefined }));
+  update<unknown[]>("outbox", (cur) => ({ next: [...(cur ?? []), ev].slice(-OUTBOX_MAX), out: undefined }));
 
 /** Vacía el outbox de forma atómica: devuelve lo que había y lo borra, sin perder eventos concurrentes. */
 export const drainOutbox = (): Promise<unknown[]> =>

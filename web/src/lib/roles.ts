@@ -18,7 +18,10 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/billetera', label: 'Billetera' },
   ],
   [ROLES.EMISOR]: [{ to: '/emisor', label: 'Panel del emisor' }],
-  [ROLES.COMERCIO]: [{ to: '/comercio', label: 'Terminales' }],
+  [ROLES.COMERCIO]: [
+    { to: '/comercio', label: 'Terminales' },
+    { to: '/verificar', label: 'Verificar' },
+  ],
 }
 
 export const HOME_BY_ROLE: Record<Role, string> = {
