@@ -3,7 +3,7 @@
 ## Cómo correrlas
 
 ```bash
-node --test "app/lib/slj/**/*.test.ts"          # 59 pruebas del núcleo (Node 26, sin dependencias)
+node --test "app/lib/slj/**/*.test.ts"          # 74 pruebas del núcleo (Node 26, sin dependencias)
 cd tools/slj && go vet ./... && go test ./...   # CLI Go: códec, vectores, CLI como subproceso
 cd tools/slj && go test -run xxx -fuzz=FuzzVerifyPresentation -fuzztime=30s
 cd tools/slj && go run . vectors -out ../../app/lib/slj/testdata/vectors.json   # regenera vectores y corre ambos lados de nuevo
@@ -18,9 +18,10 @@ Salió del grafo de graphify (comunidades por módulo); cada comunidad de códig
 | Comunidad del grafo | Archivos | Pruebas |
 | :---- | :---- | :---- |
 | Utilidades binarias | `bytes.ts` | `bytes.test.ts`: base64url por la ruta nativa y por la de respaldo, hex, `subarray` con `byteOffset ≠ 0` |
-| Códec | `codec.ts` | `codec.test.ts`: credencial de chip y de billetera, largos 0/1/64/255, ±1 byte, presentación, revocaciones |
+| Códec | `codec.ts` | `codec.test.ts`: blob de billetera (el valor va antes de la clave del celular), largos 0/1/64/255, ±1 byte, versión, presentación, revocaciones (blob y JSON de P1) |
 | P-256 | `p256.ts` | `p256.test.ts`: compresión con ambas paridades, puntos fuera de la curva, llave no extraíble |
 | Verificación | `verify.ts`, `present.ts` | `verify.test.ts`: todos los códigos, bordes de hora y vencimiento, precedencias, anti-reuso |
+| Contrato de P1 | `codec.ts`, `p256.ts`, `events.ts` | `p1.test.ts` y `p1_test.go`: credenciales y claves reales de P1; `events.test.ts`: eventos que acepta la API |
 | Almacén IndexedDB | `store.ts` | `store.test.ts` sobre `test/fake-idb.ts`: llave única, blob de revocaciones, outbox concurrente y atómico, una sola conexión |
 | Flujo completo | todo el núcleo | `flow.test.ts`: escenarios de la demo y modo avión |
 | Robustez | `verify.ts` | `fuzz.test.ts` (3.000 mutaciones) y `FuzzVerifyPresentation` (Go) |
@@ -35,7 +36,7 @@ Salió del grafo de graphify (comunidades por módulo); cada comunidad de códig
 | :---- | :---- |
 | Ana (mayor de 18) en el bar | 01 |
 | Luis solo tiene carnet; el bar no lo acepta | 05 |
-| Carnet universitario en un verificador que lo acepta | 01 (emisor 2) |
+| Carnet universitario (A3 del emisor 2) en un verificador que acepta A3 | 01 (emisor 2) |
 | María responde BLOQUEAR y llega la nueva lista | 03 |
 | Credencial alterada a mano | 02 |
 | Captura de pantalla a los 35 s | 07 |
@@ -46,13 +47,15 @@ Salió del grafo de graphify (comunidades por módulo); cada comunidad de códig
 
 ## Precedencia de códigos
 
-La verificación corta en el primer fallo, en este orden: formato (08) → hora (07) → vencimiento (04) → permiso (05) → revocación (03) → emisor conocido (08) → firmas (02) → reuso (07). Consecuencia deliberada: un QR falsificado con un handle revocado da 03 y no 02, porque la revocación es más barata de comprobar que dos firmas.
+La verificación corta en el primer fallo, en este orden: formato (08) → hora (07) → emisor conocido (08) → **firmas (02)** → vencimiento (04) → permiso (05) → revocación (03) → reuso (07). Las firmas van antes que cualquier resultado que nombre la cédula: un QR falsificado con un handle revocado da 02 y no 03, y no se envía a la API.
 
 ## Defectos que encontró el análisis (corregidos en esta rama)
 
 1. **Outbox:** `pushOutbox` leía y escribía en transacciones distintas y `takeOutbox`+`clearOutbox` borraba lo llegado entre ambas. Ahora cada operación es una sola transacción (`drainOutbox` es atómico).
 2. **Conexiones:** `store.ts` abría IndexedDB en cada operación; ahora reutiliza una conexión.
 3. **Anti-reuso:** la clave de la caché era `handle:t`, así que dos atributos del mismo ciudadano en el mismo segundo daban un 07 falso. Ahora es `handle:attr:t`.
+4. **Formato propio frente al contrato:** el verificador usaba un formato de credencial y un atributo (A7) que no eran los de P1, y enviaba resultados 07/08 que la API rechaza con 400. Ahora sigue el contrato de P1 (cabecera `0x01`, valor antes de la clave del celular, carnet = A3 del emisor 2, códigos 01–06 hacia la API) y se prueba con sus credenciales reales.
+5. **Atribución de resultados sin autenticar:** 03, 04 y 05 se decidían antes de verificar las firmas, así que un QR falso podía quedar atribuido a una cédula real. Ahora las firmas van primero.
 
 ## Lo que estas pruebas no cubren
 
