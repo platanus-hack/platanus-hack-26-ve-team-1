@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getEvents } from '../api/events'
 import type { EventItem } from '../api/types'
 import { useEventStream } from '../hooks/useEventStream'
@@ -84,20 +84,27 @@ function EventRow({ event, isLive }: { event: EventItem; isLive: boolean }) {
   )
 }
 
-export function EventHistory() {
+export function EventHistory({ onNewEvent }: { onNewEvent?: () => void }) {
   const { toast } = useToast()
   const [load, setLoad] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [list, setList] = useState<EventList>({ events: [], liveIds: new Set() })
 
+  const knownIdsRef = useRef(new Set<number>())
+  const onNewEventRef = useRef(onNewEvent)
+
+  useEffect(() => {
+    onNewEventRef.current = onNewEvent
+  })
+
   const handleLiveEvent = useCallback((event: EventItem) => {
-    setList((current) => {
-      if (current.events.some((item) => item.id === event.id)) return current
-      return {
-        events: mergeEvents(current.events, [event]),
-        liveIds: new Set(current.liveIds).add(event.id),
-      }
-    })
+    if (knownIdsRef.current.has(event.id)) return
+    knownIdsRef.current.add(event.id)
+    setList((current) => ({
+      events: mergeEvents(current.events, [event]),
+      liveIds: new Set(current.liveIds).add(event.id),
+    }))
+    onNewEventRef.current?.()
   }, [])
 
   const { connected } = useEventStream(handleLiveEvent)
@@ -107,6 +114,7 @@ export function EventHistory() {
     getEvents()
       .then((events) => {
         if (cancelled) return
+        for (const event of events) knownIdsRef.current.add(event.id)
         // Se fusiona por si el stream ya entregó eventos antes de terminar la carga.
         setList((current) => ({
           events: mergeEvents(current.events, events),

@@ -162,20 +162,33 @@ const MOCK_COMMERCE_ATTRIBUTES = ['A1', 'A2', 'A3'] as const
 
 let nextMockEventId = 1000
 
-function pick<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)]
+// Recorre todas las combinaciones lugar + dato en orden aleatorio antes de repetir ninguna,
+// para que los eventos simulados no se vean como filas idénticas.
+let mockComboQueue: Array<{ local: string; atributo: string }> = []
+
+function nextMockCombo(): { local: string; atributo: string } {
+  if (mockComboQueue.length === 0) {
+    mockComboQueue = MOCK_PLACES.flatMap((local) =>
+      MOCK_COMMERCE_ATTRIBUTES.map((atributo) => ({ local, atributo })),
+    ).sort(() => Math.random() - 0.5)
+  }
+  return mockComboQueue.pop()!
 }
+
+let mockStreamCount = 0
 
 function randomMockEvent(userId: string): MockBackendEvent {
   const id = nextMockEventId++
   const hora = new Date().toISOString()
-  // Ana recibe a veces una lectura de emergencia; los demás reflejan el estado de su cédula.
-  if (userId === 'u-ana' && Math.random() < 0.2) {
+  mockStreamCount += 1
+  // Ana recibe una lectura de emergencia cada 6 eventos; los demás reflejan el estado de su cédula.
+  if (userId === 'u-ana' && mockStreamCount % 6 === 0) {
     return backendEvent(id, 'Hospital Central', 'A4', 1, hora, true)
   }
   const resultado =
     userId === 'u-ana' ? 1 : userId === 'u-luis' ? 5 : userId === 'u-maria' ? 3 : 2
-  return backendEvent(id, pick(MOCK_PLACES), pick(MOCK_COMMERCE_ATTRIBUTES), resultado, hora)
+  const { local, atributo } = nextMockCombo()
+  return backendEvent(id, local, atributo, resultado, hora)
 }
 
 export const mockTerminals: Terminal[] = [

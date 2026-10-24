@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import type { CardInfo } from '../api/types'
 import { AttributeIcon } from '../components/AttributeIcon'
@@ -6,7 +6,7 @@ import { BlockCardSection } from '../components/BlockCardSection'
 import { EventHistory } from '../components/EventHistory'
 import { OptionalDataForm } from '../components/OptionalDataForm'
 import { PageTitle } from '../components/PageTitle'
-import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Spinner, Tabs, type TabItem } from '../components/ui'
 import { WhatsAppSettings } from '../components/WhatsAppSettings'
 import { useAuth } from '../hooks/useAuth'
 import { useCardInfo } from '../hooks/useCardInfo'
@@ -95,65 +95,104 @@ export default function HomePage() {
     }
   }, [state, toast])
 
+  const [activeTab, setActiveTab] = useState('cedula')
+  const [historyHasNew, setHistoryHasNew] = useState(false)
+  const activeTabRef = useRef(activeTab)
+
+  function handleTabChange(id: string) {
+    activeTabRef.current = id
+    setActiveTab(id)
+    if (id === 'historial') setHistoryHasNew(false)
+  }
+
+  // El historial sigue recibiendo eventos con la pestaña oculta: solo se marca el punto.
+  const handleNewEvent = useCallback(() => {
+    if (activeTabRef.current !== 'historial') setHistoryHasNew(true)
+  }, [])
+
+  const tabs: TabItem[] = [
+    {
+      id: 'cedula',
+      label: 'Mi cédula',
+      panel: (
+        <>
+          <Card className="border-primary-200 bg-primary-50">
+            <h2 className="text-2xl font-bold text-primary-900">Sabe más, muestra menos</h2>
+            <p className="mt-2 text-lg text-primary-900">
+              sIsA guarda tus datos, pero cada lector recibe solo la respuesta que necesita. Un
+              comercio ve «mayor de 18: sí» y nada más.
+            </p>
+          </Card>
+
+          {state.status === 'loading' && (
+            <div className="flex items-center gap-3 py-8 text-xl text-primary-800">
+              <Spinner label="Cargando tu cédula" className="[&>svg]:size-8" />
+              <span aria-hidden="true">Cargando tu cédula…</span>
+            </div>
+          )}
+
+          {state.status === 'error' &&
+            (isNotFound(state.error) ? (
+              <EmptyState
+                title="Aún no tienes una cédula"
+                description="Cuando el Registro emita tu cédula sIsA, aparecerá aquí."
+              />
+            ) : (
+              <EmptyState
+                title="No pudimos cargar tu cédula"
+                description={getErrorMessage(state.error)}
+                action={<Button onClick={reload}>Reintentar</Button>}
+              />
+            ))}
+
+          {state.status === 'ready' && (
+            <>
+              <CardStatus card={state.card} />
+              <section aria-labelledby="datos-chip" className="flex flex-col gap-4">
+                <h2 id="datos-chip" className="text-2xl font-bold text-primary-900">
+                  Qué guarda tu chip y quién puede leerlo
+                </h2>
+                <AttributeGrid card={state.card} />
+              </section>
+            </>
+          )}
+        </>
+      ),
+    },
+    { id: 'datos', label: 'Datos opcionales', panel: <OptionalDataForm /> },
+    {
+      id: 'historial',
+      label: 'Historial',
+      notice: historyHasNew ? 'Hay eventos nuevos' : undefined,
+      panel: <EventHistory onNewEvent={handleNewEvent} />,
+    },
+    {
+      id: 'seguridad',
+      label: 'Seguridad',
+      panel: (
+        <>
+          {state.status === 'ready' && (
+            <BlockCardSection card={state.card} onRevoked={markRevoked} />
+          )}
+          <WhatsAppSettings />
+        </>
+      ),
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <PageTitle>Mi cédula</PageTitle>
+        <PageTitle>Portal ciudadano</PageTitle>
         {user && <p className="text-xl text-neutral-700">Hola, {user.nombre}.</p>}
       </header>
 
-      <Card className="border-primary-200 bg-primary-50">
-        <h2 className="text-2xl font-bold text-primary-900">
-          Sabe más, muestra menos
-        </h2>
-        <p className="mt-2 text-lg text-primary-900">
-          sIsA guarda tus datos, pero cada lector recibe solo la respuesta que
-          necesita. Un comercio ve «mayor de 18: sí» y nada más.
-        </p>
-      </Card>
-
-      {state.status === 'loading' && (
-        <div className="flex items-center gap-3 py-8 text-xl text-primary-800">
-          <Spinner label="Cargando tu cédula" className="[&>svg]:size-8" />
-          <span aria-hidden="true">Cargando tu cédula…</span>
-        </div>
-      )}
-
-      {state.status === 'error' &&
-        (isNotFound(state.error) ? (
-          <EmptyState
-            title="Aún no tienes una cédula"
-            description="Cuando el Registro emita tu cédula sIsA, aparecerá aquí."
-          />
-        ) : (
-          <EmptyState
-            title="No pudimos cargar tu cédula"
-            description={getErrorMessage(state.error)}
-            action={<Button onClick={reload}>Reintentar</Button>}
-          />
-        ))}
-
-      {state.status === 'ready' && (
-        <>
-          <CardStatus card={state.card} />
-          <section aria-labelledby="datos-chip" className="flex flex-col gap-4">
-            <h2 id="datos-chip" className="text-2xl font-bold text-primary-900">
-              Qué guarda tu chip y quién puede leerlo
-            </h2>
-            <AttributeGrid card={state.card} />
-          </section>
-        </>
-      )}
-
-      <OptionalDataForm />
-
-      <EventHistory />
-
-      {state.status === 'ready' && (
-        <BlockCardSection card={state.card} onRevoked={markRevoked} />
-      )}
-
-      <WhatsAppSettings />
+      <Tabs
+        label="Secciones del portal"
+        items={tabs}
+        activeId={activeTab}
+        onChange={handleTabChange}
+      />
     </div>
   )
 }

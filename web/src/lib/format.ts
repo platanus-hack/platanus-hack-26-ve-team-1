@@ -1,7 +1,7 @@
 const dateFormatter = new Intl.DateTimeFormat('es-CL', { dateStyle: 'long' })
 const dateTimeFormatter = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
-  timeStyle: 'short',
+  timeStyle: 'medium',
 })
 
 export function formatDate(iso: string): string {
