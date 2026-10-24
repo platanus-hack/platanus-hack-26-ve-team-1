@@ -80,7 +80,7 @@ void pantallaEspera()
     bloqueado = false;
     resultado_desde = 0;
     tft.fillScreen(NEGRO);
-    centrado(F("SoloLoJusto"), 50, 5, BLANCO);
+    centrado(F("sIsA"), 40, 8, BLANCO);
     centrado(F("Esperando c\x82" "dula..."), 150, 3, GRIS);
     pie();
 }
