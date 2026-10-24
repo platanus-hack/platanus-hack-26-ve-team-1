@@ -54,3 +54,4 @@ desktop.ini
 secrets/
 *.db
 api/app
+api/retention

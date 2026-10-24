@@ -1,6 +1,7 @@
 // admin crea terminales (con su token) y usuarios con rol emisor o comercio.
 //
 //	admin terminal -name "Bar La Esquina" -role comercio -attr A1 -modo verificar
+//	admin demo [-ana +58... -luis +58... -maria +58...]   siembra o restaura los datos de demo
 //	admin user -email emisor@slj.test -password ... -role emisor -name "Registro Civil"
 //
 // Usa DATABASE_URL del entorno o la de .env.local.
@@ -105,7 +106,9 @@ func main() {
 			log.Fatalf("no se pudo crear el usuario: %v", err)
 		}
 		fmt.Printf("usuario %d (%s) listo\n", id, *role)
+	case "demo":
+		demo(ctx, db, args)
 	default:
-		log.Fatal("uso: admin terminal|user [opciones]")
+		log.Fatal("uso: admin terminal|user|demo [opciones]")
 	}
 }

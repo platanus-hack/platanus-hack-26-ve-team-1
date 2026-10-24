@@ -13,7 +13,8 @@ import (
 // Codificación de los valores (UTF-8):
 //
 //	A1, A2: 0x01 (solo se emiten si la persona cumple la edad)
-//	A3: "NOMBRE|V-12345678|AAAA-MM-DD" (nombre | número | vigencia), máx. 64 B
+//	A3: "NOMBRE|V-12345678|AAAA-MM-DD" (nombre | número | vigencia), máx. 64 B;
+//	    el carnet universitario usa el mismo formato con el número de carnet y emisor 0x02
 //	A4: texto libre "O+ penicilina", máx. 16 B
 //	A5: texto libre "Mama 04141234567", máx. 16 B
 //	A6: texto libre "D;LIC-B2", máx. 16 B
@@ -24,6 +25,12 @@ type Profile struct {
 		ID         string `json:"id"`
 		ValidUntil string `json:"valid_until"`
 	} `json:"identity,omitempty"`
+	// Carnet universitario: A3 firmado por la universidad (emisor 0x02), solo en la billetera.
+	Carnet *struct {
+		Name       string `json:"name"`
+		ID         string `json:"id"` // número de carnet
+		ValidUntil string `json:"valid_until"`
+	} `json:"carnet,omitempty"`
 	Blood        string `json:"blood,omitempty"`
 	Contact      string `json:"contact,omitempty"`
 	DonorLicense string `json:"donor_license,omitempty"`
@@ -77,4 +84,17 @@ func (p Profile) Attributes(now time.Time) ([]attrValue, error) {
 		}
 	}
 	return out, nil
+}
+
+// CarnetValue devuelve el valor del carnet universitario (A3 del emisor 0x02), si el perfil lo tiene.
+func (p Profile) CarnetValue() ([]byte, bool, error) {
+	c := p.Carnet
+	if c == nil || c.Name == "" || c.ID == "" {
+		return nil, false, nil
+	}
+	v := []byte(c.Name + "|" + c.ID + "|" + c.ValidUntil)
+	if len(v) > sign.MaxValueLen(sign.AttrIdentidad) {
+		return nil, false, errors.New("el valor del carnet excede 64 bytes")
+	}
+	return v, true, nil
 }

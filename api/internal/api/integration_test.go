@@ -44,8 +44,9 @@ func TestIntegration(t *testing.T) {
 	t.Cleanup(db.Close) // se registra antes que la limpieza, así corre después
 
 	issuerKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	uniKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	srv := &Server{DB: db, JWTSecret: []byte("secreto-de-prueba-123456"),
-		Issuers: map[byte]*ecdsa.PrivateKey{sign.IssuerNacional: issuerKey}, ValidDays: 365}
+		Issuers: map[byte]*ecdsa.PrivateKey{sign.IssuerNacional: issuerKey, sign.IssuerUniversidad: uniKey}, ValidDays: 365}
 	r := chi.NewRouter()
 	srv.Routes(r)
 	ts := httptest.NewServer(r)
@@ -121,6 +122,7 @@ func TestIntegration(t *testing.T) {
 	// Emisor carga el perfil de Ana y pide la emisión.
 	prof := map[string]any{"birthdate": "2000-03-04",
 		"identity": map[string]any{"name": "ANA PEREZ", "id": "V-12345678", "valid_until": "2030-01-01"},
+		"carnet":   map[string]any{"name": "ANA PEREZ", "id": "UCV-1", "valid_until": "2027-07-31"},
 		"blood":    "O+ penicilina"}
 	out := call(emisor, "PUT", fmt.Sprintf("/api/citizens/%d/profile", anaID), "", prof, 200)
 	if fmt.Sprint(out["attributes"]) != "[A1 A2 A3 A4]" {
@@ -182,22 +184,39 @@ func TestIntegration(t *testing.T) {
 	call(ana, "POST", "/api/link/confirm", "", map[string]any{"code": "000000", "public_key": pub}, 404)
 	conf := call(ana, "POST", "/api/link/confirm", "", map[string]any{"code": code, "public_key": pub}, 200)
 	call(ana, "POST", "/api/link/confirm", "", map[string]any{"code": code, "public_key": pub}, 404) // un solo uso
-	if n := len(conf["credentials"].([]any)); n != 2 {
-		t.Fatalf("credenciales: %d (esperaba A1 y A2)", n)
+	if n := len(conf["credentials"].([]any)); n != 3 {
+		t.Fatalf("credenciales: %d (esperaba A1, A2 y el carnet)", n)
 	}
 
 	// Billetera: Ana ve las suyas y se verifican; Luis no ve nada.
 	w := call(ana, "GET", "/api/wallet", "", nil, 200)["credentials"].([]any)
-	if len(w) != 2 {
+	if len(w) != 3 {
 		t.Fatalf("wallet: %d", len(w))
 	}
-	for _, c := range w {
-		blob, _ := hex.DecodeString(c.(map[string]any)["blob_hex"].(string))
-		at, p, sig, err := sign.ParseWalletBlob(blob)
-		if err != nil || !at.VerifyWallet(&issuerKey.PublicKey, p, sig) || hex.EncodeToString(p) != pub {
-			t.Fatalf("credencial de billetera inválida: %v", err)
+	checkWallet := func(list []any) {
+		t.Helper()
+		carnets := 0
+		for _, c := range list {
+			cm := c.(map[string]any)
+			blob, _ := hex.DecodeString(cm["blob_hex"].(string))
+			at, p, sig, err := sign.ParseWalletBlob(blob)
+			key := issuerKey
+			if at.Issuer == sign.IssuerUniversidad {
+				key = uniKey
+				carnets++
+				if at.Code != sign.AttrIdentidad || string(at.Value) != "ANA PEREZ|UCV-1|2027-07-31" || cm["issuer"] != "0x02" {
+					t.Fatalf("carnet inesperado: %+v %v", at, cm)
+				}
+			}
+			if err != nil || !at.VerifyWallet(&key.PublicKey, p, sig) || hex.EncodeToString(p) != pub {
+				t.Fatalf("credencial de billetera inválida: %v", err)
+			}
+		}
+		if carnets != 1 {
+			t.Fatalf("carnets: %d", carnets)
 		}
 	}
+	checkWallet(w)
 	if n := len(call(luis, "GET", "/api/wallet", "", nil, 200)["credentials"].([]any)); n != 0 {
 		t.Fatalf("Luis ve %d credenciales de Ana", n)
 	}
@@ -233,4 +252,50 @@ func TestIntegration(t *testing.T) {
 		t.Fatal("el handle revocado no aparece en /api/revocations")
 	}
 	call(newClient(), "POST", "/api/link/start", link, map[string]any{"h": handleHex}, 409)
+
+	// Mis cédulas: Ana ve la suya revocada; Luis ninguna.
+	cs := call(ana, "GET", "/api/cards", "", nil, 200)["cards"].([]any)
+	if len(cs) != 1 || cs[0].(map[string]any)["estado"] != "revocada" || cs[0].(map[string]any)["h"] != handleHex {
+		t.Fatalf("cédulas de Ana: %v", cs)
+	}
+	if n := len(call(luis, "GET", "/api/cards", "", nil, 200)["cards"].([]any)); n != 0 {
+		t.Fatalf("Luis ve %d cédulas", n)
+	}
+
+	// Reactivar: Luis no puede; Ana sí, y las credenciales (con el carnet) vuelven.
+	call(luis, "POST", "/api/reactivate", "", map[string]any{"h": handleHex}, 404)
+	call(newClient(), "POST", "/api/reactivate", "", map[string]any{"h": handleHex}, 401)
+	if n := call(ana, "POST", "/api/reactivate", "", map[string]any{"h": handleHex}, 200)["credentials"]; n != float64(3) {
+		t.Fatalf("credenciales reemitidas: %v", n)
+	}
+	call(ana, "POST", "/api/reactivate", "", map[string]any{"h": handleHex}, 404) // ya está activa
+	checkWallet(call(ana, "GET", "/api/wallet", "", nil, 200)["credentials"].([]any))
+	resp, _ = http.Get(ts.URL + "/api/revocations")
+	revs.Hs = nil
+	json.NewDecoder(resp.Body).Decode(&revs)
+	resp.Body.Close()
+	if strings.Contains(strings.Join(revs.Hs, ","), handleHex) {
+		t.Fatal("la cédula reactivada sigue en /api/revocations")
+	}
+
+	// Carnet: renovar lo pide el emisor; un ciudadano no puede.
+	call(ana, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": anaID}, 403)
+	call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": luisID}, 422) // sin datos de carnet
+	if n := call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": anaID}, 200)["dispositivos"]; n != float64(1) {
+		t.Fatalf("dispositivos: %v", n)
+	}
+	if n := len(call(ana, "GET", "/api/wallet", "", nil, 200)["credentials"].([]any)); n != 3 {
+		t.Fatalf("la renovación duplicó credenciales: %d", n)
+	}
+
+	// Terminales: el emisor cambia el modo y el terminal lo ve en su config.
+	call(ana, "GET", "/api/terminals", "", nil, 403)
+	var shopID int64
+	db.QueryRow(ctx, `SELECT id FROM terminals WHERE name = $1`, tag+"comercio").Scan(&shopID)
+	call(emisor, "PATCH", fmt.Sprintf("/api/terminals/%d", shopID), "", map[string]any{"modo": "emergencia", "a": "A4"}, 200)
+	cfg2 := call(newClient(), "GET", "/api/terminal/config", shop, nil, 200)
+	if cfg2["modo"] != "emergencia" || cfg2["a"] != "A4" {
+		t.Fatalf("config tras PATCH: %v", cfg2)
+	}
+	call(emisor, "PATCH", fmt.Sprintf("/api/terminals/%d", shopID), "", map[string]any{"modo": "nada"}, 400)
 }

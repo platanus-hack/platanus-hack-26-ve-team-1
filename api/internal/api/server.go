@@ -57,6 +57,8 @@ func (s *Server) Routes(r chi.Router) {
 		r.Get("/api/wallet", s.wallet)
 		r.Post("/api/link/confirm", s.linkConfirm)
 		r.Post("/api/revoke", s.revoke)
+		r.Get("/api/cards", s.listCards)
+		r.Post("/api/reactivate", s.reactivate)
 		r.Get("/api/events", s.listEvents)
 		r.Get("/api/events/stream", s.eventsStream)
 
@@ -65,7 +67,11 @@ func (s *Server) Routes(r chi.Router) {
 			r.Get("/api/citizens", s.listCitizens)
 			r.Put("/api/citizens/{id}/profile", s.putProfile)
 			r.Post("/api/emision/request", s.emisionRequest)
+			r.Post("/api/carnet/issue", s.issueCarnet)
+			r.Get("/api/terminals", s.listTerminals)
+			r.Patch("/api/terminals/{id}", s.patchTerminal)
 		})
+		r.With(requireRole("comercio", "emisor")).Get("/api/commerce/summary", s.commerceSummary)
 	})
 
 	// Terminales (gateway): Authorization: Bearer <token>

@@ -121,13 +121,19 @@ Los errores son `{"ok":false,"error":"..."}`. Binarios en hex (handle 16 caracte
 | `POST /api/emision/start` | terminal registro, modo emitir | `{uid}` → `{h,blocks:[{s,b,d}]}` (índice primero) |
 | `POST /api/link/start` | terminal en modo vincular | `{h}` → `{c}` (6 dígitos, 2 min) |
 | `POST /api/link/confirm` | sesión | `{code,public_key}` → `{credentials:[{a,blob_hex,expires}]}`; la cédula debe ser de esa cuenta |
-| `GET /api/wallet[?public_key=hex]` | sesión | `{credentials:[...]}` vigentes, de cédulas activas |
+| `GET /api/wallet[?public_key=hex]` | sesión | `{credentials:[{a,issuer,blob_hex,expires}]}` vigentes, de cédulas activas |
 | `GET /api/events[?limit=50&before=<id>]` | sesión | `{events:[{id,local,atributo,resultado,hora,emergencia}]}`, más recientes primero |
 | `GET /api/events/stream` | sesión | SSE: un evento `evento` por lectura nueva, con el mismo JSON; admite `Last-Event-ID` |
 | `POST /api/events` | terminal | `{t:"verif",h,a,res,ts,emg}` o `{t:"tamper",ts}` → `{ok}` |
 | `GET /api/revocations` | público | `{hs:[...]}` |
 | `GET /api/issuers` | público | `{"0x01":JWK,"0x02":JWK}` |
 | `POST /api/revoke` | emisor o dueño | `{h}`; borra las credenciales de billetera |
+| `POST /api/reactivate` | emisor o dueño | `{h}`; reactiva la cédula y vuelve a emitir las credenciales de sus celulares |
+| `GET /api/cards` | sesión | `{cards:[{h,estado,emitida,revocada?,atributos,dispositivos}]}` de la cuenta |
+| `POST /api/carnet/issue` | emisor | `{citizen_id}`; emite o renueva el carnet universitario en sus celulares vinculados |
+| `GET /api/terminals` | emisor | `{terminals:[{id,local,rol,a,modo}]}` |
+| `PATCH /api/terminals/{id}` | emisor | `{modo?,a?}`; el terminal lo lee en `/api/terminal/config` |
+| `GET /api/commerce/summary[?days=7]` | comercio o emisor | totales de sus terminales, sin handles |
 | `GET /api/terminal/config` | terminal | `{rol,a,local,modo}` |
 
 Credenciales de billetera derivadas: A1, A2 y A6 (si existen y no han vencido). Identidad y datos de salud no salen del chip.
@@ -175,3 +181,25 @@ Si el envío con botones falla, se manda el mismo texto con "Responde BLOQUEAR."
 - Solo lecturas (`verif`); las alarmas de manipulación no aparecen. Se incluyen todos los resultados, no solo los aprobados.
 - El stream envía solo lo nuevo; el historial se pide con `GET /api/events`. Con `Last-Event-ID` recupera lo perdido. Manda un latido cada 25 s y sondea cada 10 s como respaldo del `LISTEN/NOTIFY` de Postgres (canal `slj_events`).
 - Con `EventSource` basta la cookie de sesión del mismo origen.
+
+### Carnet universitario (emisor 0x02)
+
+No se agregó un código de atributo nuevo: el carnet es un **A3 (Identidad) firmado por la universidad** (cabecera con emisor `0x02`), solo en la billetera, nunca en el chip. Valor: `NOMBRE|N°-CARNET|AAAA-MM-DD` (≤ 64 B), igual que A3. Sale del campo `carnet` del perfil (`{name, id, valid_until}`) y se emite al vincular el celular o con `POST /api/carnet/issue`. Un celular puede tener a la vez un A3 nacional y uno universitario: se distinguen por `issuer` (`"0x01"`/`"0x02"`) y por el byte de emisor de la cabecera. El verificador debe validar con la clave que corresponda a ese byte (`/api/issuers`).
+
+### Comercio
+
+`GET /api/commerce/summary` devuelve para los terminales cuyo `owner_id` es la cuenta (todos, si es emisor):
+
+```json
+{"ok":true,"days":7,"totals":{"total":4,"aprobadas":3,"rechazadas":1,"manipulaciones":1},
+ "por_resultado":{"1":3,"2":1},"por_atributo":{"A1":2,"A4":1,"A2":1},
+ "por_dia":[{"dia":"2026-10-24","total":4,"aprobadas":3}],
+ "terminales":[{"id":2,"local":"Bar La Esquina","total":4,"aprobadas":3,"rechazadas":1,"manipulaciones":1}]}
+```
+
+Nunca incluye handles ni datos de personas. Los días van en hora de Venezuela.
+
+### Datos de demo y retención
+
+- `go -C api run ./cmd/admin demo [-ana +58.. -luis +58.. -maria +58..]` siembra o restaura: cuentas `emisor@`, `comercio@`, `ana@`, `luis@`, `maria@slj.test` (misma contraseña) y los terminales Registro (emitir), Bar La Esquina (A1), Clinica Salud (A4), Ambulancia 1 (emergencia) y Transito (A6). Borra cédulas, credenciales, eventos y solicitudes de las cuentas demo y deja los modos en su valor inicial. La contraseña y los tokens quedan en `secrets/demo.json` y no cambian entre restauraciones.
+- `cmd/retention` borra eventos de más de 30 días (`RETENTION_DAYS`), códigos vencidos y solicitudes viejas. Va como Cron Job en Render.

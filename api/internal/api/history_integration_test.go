@@ -74,6 +74,9 @@ func TestIntegrationHistory(t *testing.T) {
 	}
 	ana, anaID := register("ana")
 	luis, luisID := register("luis")
+	tienda, tiendaID := register("tienda")
+	otra, otraID := register("otra")
+	db.Exec(ctx, `UPDATE citizens SET role = 'comercio' WHERE id = ANY($1)`, []int64{tiendaID, otraID})
 
 	mkCard := func(citizen int64) string {
 		h := make([]byte, 8)
@@ -94,6 +97,7 @@ func TestIntegrationHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminalIDs = append(terminalIDs, termID)
+	db.Exec(ctx, `UPDATE terminals SET owner_id = $1 WHERE id = $2`, tiendaID, termID)
 
 	post := func(body string) {
 		t.Helper()
@@ -219,6 +223,27 @@ func TestIntegrationHistory(t *testing.T) {
 	if p := m["events"].([]any); len(p) != 1 || p[0].(map[string]any)["atributo"] != "A4" {
 		t.Fatalf("paginación: %v", p)
 	}
+	// Vista del comercio: totales de sus terminales, sin handles; otros no ven nada suyo.
+	code, rawBody, m = get(tienda, "/api/commerce/summary")
+	tot := m["totals"].(map[string]any)
+	pr := m["por_resultado"].(map[string]any)
+	if code != 200 || tot["total"] != float64(4) || tot["aprobadas"] != float64(3) || tot["rechazadas"] != float64(1) ||
+		tot["manipulaciones"] != float64(1) || pr["1"] != float64(3) || pr["2"] != float64(1) || len(m["terminales"].([]any)) != 1 {
+		t.Fatalf("resumen del comercio: %d %s", code, rawBody)
+	}
+	for _, banned := range []string{anaCard, luisCard, "handle", "uid", `"h"`} {
+		if strings.Contains(string(rawBody), banned) {
+			t.Fatalf("el resumen contiene %q: %s", banned, rawBody)
+		}
+	}
+	_, _, m = get(otra, "/api/commerce/summary")
+	if m["totals"].(map[string]any)["total"] != float64(0) || len(m["terminales"].([]any)) != 0 {
+		t.Fatalf("otro comercio ve datos ajenos: %v", m)
+	}
+	if code, _, _ := get(ana, "/api/commerce/summary"); code != 403 {
+		t.Fatalf("un ciudadano no debe ver el resumen: %d", code)
+	}
+
 	// Sin sesión no hay nada.
 	if code, _, _ := get(&http.Client{}, "/api/events"); code != 401 {
 		t.Fatalf("sin sesión: %d", code)

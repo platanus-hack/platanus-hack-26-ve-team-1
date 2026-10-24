@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -142,7 +143,7 @@ func (s *Server) linkConfirm(w http.ResponseWriter, r *http.Request) {
 		serverErr(w, err)
 		return
 	}
-	creds, err := s.issueWallet(r.Context(), tx, deviceID, handle, pub)
+	creds, err := s.issueWallet(r.Context(), tx, deviceID, handle, pub, user.ID)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -156,12 +157,15 @@ func (s *Server) linkConfirm(w http.ResponseWriter, r *http.Request) {
 
 type credential struct {
 	A       string `json:"a"`
+	Issuer  string `json:"issuer"` // "0x01" nacional, "0x02" universidad
 	BlobHex string `json:"blob_hex"`
 	Expires int64  `json:"expires"`
 }
 
+func issuerLabel(code int) string { return "0x" + hexByte(byte(code)) }
+
 // issueWallet firma las credenciales derivadas atadas a la clave del celular y las guarda.
-func (s *Server) issueWallet(ctx context.Context, tx pgx.Tx, deviceID int64, handle, pub []byte) ([]credential, error) {
+func (s *Server) issueWallet(ctx context.Context, tx pgx.Tx, deviceID int64, handle, pub []byte, citizenID int64) ([]credential, error) {
 	rows, err := tx.Query(ctx,
 		`SELECT code, issuer, value, expires_at FROM attributes
 		  WHERE handle = $1 AND code = ANY($2) AND expires_at > $3 ORDER BY code`,
@@ -188,6 +192,19 @@ func (s *Server) issueWallet(ctx context.Context, tx pgx.Tx, deviceID int64, han
 		return nil, err
 	}
 
+	// El carnet universitario sale del perfil y lo firma el emisor 0x02.
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1`, citizenID).Scan(&raw); err != nil {
+		return nil, err
+	}
+	var prof Profile
+	_ = json.Unmarshal(raw, &prof)
+	if v, ok, err := prof.CarnetValue(); err != nil {
+		return nil, err
+	} else if ok && s.Issuers[sign.IssuerUniversidad] != nil {
+		got = append(got, row{sign.AttrIdentidad, sign.IssuerUniversidad, v, s.now().AddDate(0, 0, s.ValidDays)})
+	}
+
 	out := []credential{}
 	var h [8]byte
 	copy(h[:], handle)
@@ -206,13 +223,13 @@ func (s *Server) issueWallet(ctx context.Context, tx pgx.Tx, deviceID int64, han
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO wallet_credentials (device_id, handle, code, blob, expires_at) VALUES ($1,$2,$3,$4,$5)
-			 ON CONFLICT (device_id, code) DO UPDATE SET handle = EXCLUDED.handle, blob = EXCLUDED.blob,
+			`INSERT INTO wallet_credentials (device_id, handle, code, issuer, blob, expires_at) VALUES ($1,$2,$3,$4,$5,$6)
+			 ON CONFLICT (device_id, code, issuer) DO UPDATE SET handle = EXCLUDED.handle, blob = EXCLUDED.blob,
 			   expires_at = EXCLUDED.expires_at, created_at = now()`,
-			deviceID, handle, x.code, blob, x.exp); err != nil {
+			deviceID, handle, x.code, x.issuer, blob, x.exp); err != nil {
 			return nil, err
 		}
-		out = append(out, credential{attrLabel(x.code), hex.EncodeToString(blob), x.exp.Unix()})
+		out = append(out, credential{attrLabel(x.code), issuerLabel(x.issuer), hex.EncodeToString(blob), x.exp.Unix()})
 	}
 	return out, nil
 }
@@ -220,7 +237,7 @@ func (s *Server) issueWallet(ctx context.Context, tx pgx.Tx, deviceID int64, han
 // wallet devuelve las credenciales vigentes del ciudadano (opcional: ?public_key=<hex> para un solo celular).
 func (s *Server) wallet(w http.ResponseWriter, r *http.Request) {
 	user := userFrom(r.Context())
-	q := `SELECT wc.code, wc.blob, wc.expires_at
+	q := `SELECT wc.code, wc.issuer, wc.blob, wc.expires_at
 	        FROM wallet_credentials wc
 	        JOIN devices d ON d.id = wc.device_id
 	        JOIN cards c ON c.handle = wc.handle
@@ -235,7 +252,7 @@ func (s *Server) wallet(w http.ResponseWriter, r *http.Request) {
 		q += ` AND d.public_key = $3`
 		args = append(args, pub)
 	}
-	rows, err := s.DB.Query(r.Context(), q+` ORDER BY wc.code`, args...)
+	rows, err := s.DB.Query(r.Context(), q+` ORDER BY wc.code, wc.issuer`, args...)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -243,14 +260,14 @@ func (s *Server) wallet(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []credential{}
 	for rows.Next() {
-		var code int
+		var code, issuer int
 		var blob []byte
 		var exp time.Time
-		if err := rows.Scan(&code, &blob, &exp); err != nil {
+		if err := rows.Scan(&code, &issuer, &blob, &exp); err != nil {
 			serverErr(w, err)
 			return
 		}
-		out = append(out, credential{attrLabel(code), hex.EncodeToString(blob), exp.Unix()})
+		out = append(out, credential{attrLabel(code), issuerLabel(issuer), hex.EncodeToString(blob), exp.Unix()})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "credentials": out})
 }
