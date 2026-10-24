@@ -144,6 +144,25 @@
 #define BLOQ_OUT_SetOpenDrain()       do { ODCONBbits.ODCB7 = 1; } while(0)
 #define BLOQ_OUT_SetAnalogMode()      do { ANSELBbits.ANSB7 = 1; } while(0)
 #define BLOQ_OUT_SetDigitalMode()     do { ANSELBbits.ANSB7 = 0; } while(0)
+// get/set IO_RC0 aliases
+#define FW_SET_TRIS                 TRISCbits.TRISC0
+#define FW_SET_LAT                  LATCbits.LATC0
+#define FW_SET_PORT                 PORTCbits.RC0
+#define FW_SET_WPU                  WPUCbits.WPUC0
+#define FW_SET_OD                   ODCONCbits.ODCC0
+#define FW_SET_ANS                  ANSELCbits.ANSC0
+#define FW_SET_SetHigh()            do { LATCbits.LATC0 = 1; } while(0)
+#define FW_SET_SetLow()             do { LATCbits.LATC0 = 0; } while(0)
+#define FW_SET_Toggle()             do { LATCbits.LATC0 = ~LATCbits.LATC0; } while(0)
+#define FW_SET_GetValue()           PORTCbits.RC0
+#define FW_SET_SetDigitalInput()    do { TRISCbits.TRISC0 = 1; } while(0)
+#define FW_SET_SetDigitalOutput()   do { TRISCbits.TRISC0 = 0; } while(0)
+#define FW_SET_SetPullup()          do { WPUCbits.WPUC0 = 1; } while(0)
+#define FW_SET_ResetPullup()        do { WPUCbits.WPUC0 = 0; } while(0)
+#define FW_SET_SetPushPull()        do { ODCONCbits.ODCC0 = 0; } while(0)
+#define FW_SET_SetOpenDrain()       do { ODCONCbits.ODCC0 = 1; } while(0)
+#define FW_SET_SetAnalogMode()      do { ANSELCbits.ANSC0 = 1; } while(0)
+#define FW_SET_SetDigitalMode()     do { ANSELCbits.ANSC0 = 0; } while(0)
 // get/set IO_RC2 aliases
 #define LED0_TRIS                 TRISCbits.TRISC2
 #define LED0_LAT                  LATCbits.LATC2

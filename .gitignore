@@ -42,6 +42,10 @@ firmware/pic/**/nbproject/private/
 firmware/pic/**/dist/
 firmware/pic/**/debug/
 
+# La extensión MPLAB los crea en la raíz si se abre el repo completo
+/_build/
+/cmake/
+
 # Archivos de sistema
 Thumbs.db
 desktop.ini

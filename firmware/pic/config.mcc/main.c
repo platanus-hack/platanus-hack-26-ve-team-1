@@ -12,17 +12,64 @@
  * FW_SET (RC0) es una salida del firmware que vuelve a CLC1 por CLCIN2PPS:
  * se activa con timeout de latido o con SW0. BLOQ_OUT lo copia el firmware de CLC1.
  *
+ * El CLC1 y su PPS se configuran aquí por registros (MCC no genera el CLC).
+ *
  * Respaldo: LATCH_POR_FIRMWARE hace lo mismo por software, con HAB_LECTOR,
  * BLOQ_OUT y LED0 como GPIO de salida en MCC (sin CLC).
  */
-#define LATCH_POR_FIRMWARE
+// #define LATCH_POR_FIRMWARE
 
 #define TICK_MS          10
 #define HB_TIMEOUT_TICKS (10000 / TICK_MS)   // 10 s sin flanco = bloqueo
 
+#ifndef LATCH_POR_FIRMWARE
+// Códigos PPS de entrada: puerto A = 0x00-0x07, B = 0x08-0x0F, C = 0x10-0x17
+#define PPS_IN_RA2   0x02
+#define PPS_IN_RA5   0x05
+#define PPS_IN_RC0   0x10
+#define PPS_OUT_CLC1 0x01
+
+static void GUARDIAN_CLC1_Initialize(void)
+{
+    CLCSELECT = 0x00;       // los registros CLCn* apuntan a CLC1
+    CLCnCON   = 0x00;       // apagado mientras se configura
+
+    CLCnSEL0  = 0x00;       // D1 = CLCIN0 = TAPA_IN   (ALTO = precinto abierto)
+    CLCnSEL1  = 0x01;       // D2 = CLCIN1 = REARME_IN (BAJO = rearme pulsado)
+    CLCnSEL2  = 0x02;       // D3 = CLCIN2 = FW_SET    (ALTO = timeout o SW0)
+    CLCnSEL3  = 0x00;       // D4 sin usar
+
+    CLCnGLS0  = 0x22;       // G1 = D1 | D3            -> S
+    CLCnGLS1  = 0x00;       // G2 = 0
+    CLCnGLS2  = 0x2A;       // G3 = D1 | D2 | D3 (invertida abajo) -> R
+    CLCnGLS3  = 0x00;       // G4 = 0
+
+    CLCnPOL   = 0x84;       // salida invertida (= ~q) y G3 invertida (NOR)
+    CLCnCON   = 0x83;       // EN, modo 3 = S-R latch
+
+    CLCIN0PPS = PPS_IN_RA5;
+    CLCIN1PPS = PPS_IN_RA2;
+    CLCIN2PPS = PPS_IN_RC0;
+    RB6PPS    = PPS_OUT_CLC1;   // HAB_LECTOR
+    RC2PPS    = PPS_OUT_CLC1;   // LED0
+
+    // Bloquea el PPS hasta el próximo reset (PPS1WAY = ON)
+    uint8_t gie = INTCONbits.GIE;
+    INTCONbits.GIE = 0;
+    PPSLOCK = 0x55;
+    PPSLOCK = 0xAA;
+    PPSLOCKbits.PPSLOCKED = 1;
+    INTCONbits.GIE = gie;
+}
+#endif
+
 int main(void)
 {
     SYSTEM_Initialize();
+#ifndef LATCH_POR_FIRMWARE
+    FW_SET_SetLow();
+    GUARDIAN_CLC1_Initialize();
+#endif
 
     // Se fuerzan aquí por si MCC los pierde al regenerar
     TAPA_IN_SetPullup();

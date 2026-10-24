@@ -20,7 +20,19 @@ Las salidas están pensadas para que ese estado signifique **lector apagado y te
 | `TAPA_IN` | RA5 | Entrada + WPU | Precinto (lazo de cable a GND) | Lazo cerrado = 0 (normal). Lazo abierto/cortado = 1 = manipulación |
 | `REARME_IN` | RA2 | Entrada + WPU | Botón de rearme a GND (oculto) | Pulsado = 0. No rearma mientras haya manipulación activa |
 | `HAB_LECTOR` | RB6 | Salida | Base del NPN (1 kΩ) → P-MOSFET lado alto del VCC del PN532 | **ALTO = PN532 encendido**, BAJO = cortado. (Antes se llamaba `CORTE_OUT`) |
-| `BLOQ_OUT` | RB7 | Salida drenador abierto, sin WPU | ESP32 pin `BLOQ_IN` (TBD) con `INPUT_PULLUP` | BAJO = normal, liberado (3,3 V) = bloqueado. Nunca saca 5 V hacia el ESP32 |
+| `BLOQ_OUT` | RB7 | Salida drenador abierto, sin WPU | ESP32 pin `BLOQ_IN` (TBD) con `INPUT_PULLUP` | BAJO = normal, liberado (3,3 V) = bloqueado. Nunca saca 5 V hacia el ESP32. Lo copia el firmware desde CLC1 |
+| `FW_SET` | RC0 | Salida (interna) | Nada externo: vuelve a CLC1 por `CLCIN2PPS` | ALTO = el firmware pide bloqueo (timeout de latido o `SW0`). No cablear |
+
+### Latch por hardware (CLC1)
+
+El latch vive en CLC1 en modo S-R. Se configura por registros en `main.c`, no en MCC:
+
+- **S** = `TAPA_IN` | `FW_SET`
+- **R** = NOR(`TAPA_IN`, `REARME_IN`, `FW_SET`): el rearme solo funciona si no hay manipulación activa
+- **Salida** invertida (= ~q) por PPS a RB6 (`HAB_LECTOR`) y RC2 (`LED0`)
+- **PPS:** CLCIN0 = RA5, CLCIN1 = RA2, CLCIN2 = RC0. Se bloquea con `PPSLOCKED` tras configurarlo (`PPS1WAY = ON`)
+
+Cortar el precinto apaga el lector aunque el CPU esté detenido (validado con un breakpoint). Respaldo por software: `#define LATCH_POR_FIRMWARE`.
 
 ### Pines que no se usan a propósito
 
@@ -31,7 +43,7 @@ Las salidas están pensadas para que ese estado signifique **lector apagado y te
 | RA3 | MCLR |
 | RC4, RC5 | UART CDC hacia el PC (libres para `printf` de depuración) |
 
-Libres para más adelante: RB4, RB5, RC0, RC1, RC6, RC7.
+Libres para más adelante: RB4, RB5, RC1, RC6, RC7.
 
 Programación: Curiosity Nano por USB (COM virtual: `COM__`), voltaje del dispositivo configurado a **5 V**.
 
@@ -74,3 +86,4 @@ Inventario de placas: 2 × ESP32, 1 × Arduino UNO, 1 × Arduino Mega. Rol de ca
 | Fecha/hora | Cambio | Avisado a |
 |---|---|---|
 | 2026-10-24 | `HB_IN` RA0→RA4 y `TAPA_IN` RA1→RA5 (liberan ICSP). `CORTE_OUT` → `HAB_LECTOR` (ALTO = encendido). `BLOQ_OUT` drenador abierto (BAJO = normal). Sensor de tapa → precinto de cable | @mozarelly (pendiente) |
+| 2026-10-24 | Latch en CLC1 (S-R, hardware) con PPS bloqueado. Nuevo `FW_SET` en RC0 (interno). Sin cambios para el ESP32 | — |
