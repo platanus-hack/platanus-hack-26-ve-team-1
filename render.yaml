@@ -1,0 +1,16 @@
+# Blueprint de Render. Por ahora solo el laboratorio de P4 (HTTPS para probar
+# llave no extraíble, QR y cámara en iPhone y Android).
+# El Web Service de Next.js se añade cuando exista el scaffold de app/ (ver docs/render.md).
+services:
+  - type: web
+    runtime: static
+    name: slj-p4-lab
+    buildCommand: echo "sin build"
+    staticPublishPath: app/public/p4-lab
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
