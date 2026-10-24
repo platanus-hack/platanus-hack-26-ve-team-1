@@ -30,5 +30,14 @@ export function useCardInfo() {
     setAttempt((current) => current + 1)
   }, [])
 
-  return { state, reload }
+  /** Refleja un bloqueo exitoso sin volver a pedir la cédula. */
+  const markRevoked = useCallback(() => {
+    setState((current) =>
+      current.status === 'ready'
+        ? { status: 'ready', card: { ...current.card, estado: 'revocada', atributos: [] } }
+        : current,
+    )
+  }, [])
+
+  return { state, reload, markRevoked }
 }

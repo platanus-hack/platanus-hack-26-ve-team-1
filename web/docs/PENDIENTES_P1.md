@@ -80,6 +80,25 @@ Ya están en el contrato: `POST /api/auth/register`, `POST /api/auth/login` (amb
 - `contactoEmergencia.telefono`: formato internacional sin espacios (`+` y 8 a 15 dígitos), o vacío si no hay contacto. Nombre y teléfono van juntos o ambos vacíos.
 - `donante`: booleano.
 
+## Bloqueo de cédula y avisos por WhatsApp
+
+Endpoints que usa el frontend (rutas en `CARD_ENDPOINTS` y `NOTIFICATIONS_ENDPOINTS`); confirmar la forma de las respuestas:
+
+| Método | Ruta (con `/api`) | Cuerpo | Respuesta esperada |
+|--------|-------------------|--------|--------------------|
+| `POST` | `/api/revoke` | sin cuerpo | `2xx`. Tras el éxito el frontend marca la cédula como revocada (`estado: "revocada"`, `atributos: []`) sin volver a pedirla. |
+| `PUT` | `/api/me/notifications` | `{ "telefono": "+56912345678", "avisosActivados": true }` | `200` con el mismo JSON guardado. `telefono` en formato internacional sin espacios, o `null`. |
+
+- El teléfono de WhatsApp es `User.telefono`, distinto del contacto de emergencia (`OptionalData`).
+- Con `avisosActivados: true` el teléfono es obligatorio (el frontend ya lo valida).
+- El usuario puede responder `BLOQUEAR` al aviso de WhatsApp para bloquear su cédula (lo gestiona el backend).
+
+### Preguntas abiertas para P1
+
+1. **`POST /api/revoke`**: ¿confirmas que va **sin body**, que la cédula se identifica **por la sesión** (cookie; el front no envía handle ni UID) y que responde `2xx` (el frontend no lee el cuerpo)?
+2. **Formato de teléfono**: ¿Kapso espera **E.164**? El frontend lo envía normalizado: `+` seguido de 8 a 15 dígitos, sin espacios ni guiones (p. ej. `+56912345678`).
+3. **`PUT /api/me/notifications`**: ¿confirmas el body `{ "telefono": "+56912345678", "avisosActivados": true }` (con `telefono: null` si no hay) y que responde `200` con **el mismo JSON** guardado?
+
 ## Forma JSON de `CardInfo`
 
 ```json

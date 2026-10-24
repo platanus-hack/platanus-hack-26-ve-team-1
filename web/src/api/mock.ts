@@ -4,6 +4,7 @@ import type {
   CardInfo,
   Citizen,
   LoginInput,
+  NotificationSettings,
   OptionalData,
   RegisterInput,
   Terminal,
@@ -214,7 +215,26 @@ function saveRegisteredUser(user: User): void {
 
 function findUserById(id: string | null): User | undefined {
   const demo = demoAccounts.find((account) => account.id === id)
-  return demo ? toUser(demo) : loadRegisteredUsers().find((u) => u.id === id)
+  const user = demo ? toUser(demo) : loadRegisteredUsers().find((u) => u.id === id)
+  return user && withNotificationOverride(user)
+}
+
+// Los cambios de WhatsApp y de bloqueo viven solo en sessionStorage (por usuario).
+function notificationsKey(userId: string): string {
+  return `sisa:mock-notifications:${userId}`
+}
+
+function revokedKey(userId: string): string {
+  return `sisa:mock-revoked:${userId}`
+}
+
+function withNotificationOverride(user: User): User {
+  try {
+    const raw = sessionStorage.getItem(notificationsKey(user.id))
+    return raw ? { ...user, ...(JSON.parse(raw) as NotificationSettings) } : user
+  } catch {
+    return user
+  }
 }
 
 function emailTaken(email: string): boolean {
@@ -231,7 +251,7 @@ export async function mockLogin({ email, password }: LoginInput): Promise<User> 
   if (demo) {
     if (demo.password !== password) throw invalidCredentials()
     sessionStorage.setItem(SESSION_KEY, demo.id)
-    return toUser(demo)
+    return withNotificationOverride(toUser(demo))
   }
   // Las cuentas registradas no guardan contraseña: el mock acepta cualquiera de 8+ caracteres.
   const registered = loadRegisteredUsers().find((user) => user.email === normalized)
@@ -239,7 +259,7 @@ export async function mockLogin({ email, password }: LoginInput): Promise<User> 
     throw invalidCredentials()
   }
   sessionStorage.setItem(SESSION_KEY, registered.id)
-  return registered
+  return withNotificationOverride(registered)
 }
 
 function invalidCredentials(): ApiError {
@@ -292,7 +312,8 @@ export async function mockGetCardInfo(): Promise<CardInfo> {
   }
   const card = mockCards[user.id]
   if (!card) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
-  return card
+  const revoked = sessionStorage.getItem(revokedKey(user.id)) === '1'
+  return revoked ? { ...card, estado: 'revocada', atributos: [] } : card
 }
 
 function requireSessionUser(): User {
@@ -360,4 +381,20 @@ export function mockOpenEventStream(handlers: {
   }, 400)
 
   return () => clearTimeout(timer)
+}
+
+export async function mockRevokeCard(): Promise<void> {
+  await delay()
+  const user = requireSessionUser()
+  if (!mockCards[user.id]) throw new ApiError(404, 'Aún no tienes una cédula emitida.')
+  sessionStorage.setItem(revokedKey(user.id), '1')
+}
+
+export async function mockSaveNotifications(
+  settings: NotificationSettings,
+): Promise<NotificationSettings> {
+  await delay()
+  const user = requireSessionUser()
+  sessionStorage.setItem(notificationsKey(user.id), JSON.stringify(settings))
+  return settings
 }

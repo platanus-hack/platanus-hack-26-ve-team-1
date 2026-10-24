@@ -8,6 +8,8 @@ export type AuthContextValue = {
   login: (input: LoginInput) => Promise<void>
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
+  /** Actualiza campos del usuario ya autenticado sin volver a consultar la sesión. */
+  updateUser: (changes: Partial<User>) => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

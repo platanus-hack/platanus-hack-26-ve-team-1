@@ -2,10 +2,12 @@ import { useEffect } from 'react'
 import { ApiError } from '../api/client'
 import type { CardInfo } from '../api/types'
 import { AttributeIcon } from '../components/AttributeIcon'
+import { BlockCardSection } from '../components/BlockCardSection'
 import { EventHistory } from '../components/EventHistory'
 import { OptionalDataForm } from '../components/OptionalDataForm'
 import { PageTitle } from '../components/PageTitle'
 import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui'
+import { WhatsAppSettings } from '../components/WhatsAppSettings'
 import { useAuth } from '../hooks/useAuth'
 import { useCardInfo } from '../hooks/useCardInfo'
 import { useToast } from '../hooks/useToast'
@@ -81,7 +83,7 @@ function AttributeGrid({ card }: { card: CardInfo }) {
 export default function HomePage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { state, reload } = useCardInfo()
+  const { state, reload, markRevoked } = useCardInfo()
 
   useEffect(() => {
     if (state.status === 'error' && !isNotFound(state.error)) {
@@ -146,6 +148,12 @@ export default function HomePage() {
       <OptionalDataForm />
 
       <EventHistory />
+
+      {state.status === 'ready' && (
+        <BlockCardSection card={state.card} onRevoked={markRevoked} />
+      )}
+
+      <WhatsAppSettings />
     </div>
   )
 }

@@ -17,7 +17,11 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      // Permite elegir el foco inicial con data-autofocus (por defecto, el primer control).
+      dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
 

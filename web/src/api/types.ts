@@ -82,6 +82,13 @@ export type OptionalData = {
   donante: boolean
 }
 
+/** Avisos por WhatsApp: el teléfono es User.telefono (distinto del contacto de emergencia). */
+export type NotificationSettings = {
+  /** Formato internacional sin espacios, p. ej. "+56912345678"; null si no hay. */
+  telefono: string | null
+  avisosActivados: boolean
+}
+
 export type LoginInput = {
   email: string
   password: string

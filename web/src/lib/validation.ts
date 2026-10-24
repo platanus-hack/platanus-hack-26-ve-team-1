@@ -2,7 +2,7 @@ const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/
 
 export const MAX_ALLERGIES_LENGTH = 200
 
-/** Quita espacios, guiones, puntos y paréntesis: "+56 9 1234-5678" → "+56912345678". */
+/** Deja "+" y dígitos (E.164): quita espacios, guiones, puntos y paréntesis. "+56 9 1234-5678" → "+56912345678". */
 export function normalizePhone(value: string): string {
   return value.replace(/[\s\-().]/g, '')
 }
