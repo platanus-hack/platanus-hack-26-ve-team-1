@@ -1,0 +1,49 @@
+# Archivos de environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keys/*private*
+gateway/config.local.json
+
+# Cosas de Node
+node_modules/
+.next/
+out/
+.vercel/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# 
+gateway/*.sqlite
+gateway/*.sqlite-journal
+gateway/*.db
+gateway/logs/
+
+# De platformio, la plataforma donde programo los microcontroladores no PIC
+.pio/
+.pioenvs/
+.piolibdeps/
+firmware/**/.vscode/c_cpp_properties.json
+firmware/**/.vscode/launch.json
+firmware/**/.vscode/ipch/
+
+# MPLAB
+firmware/pic/out/
+firmware/pic/_build/
+firmware/pic/build/
+firmware/pic/cmake/
+firmware/pic/.generated_files/
+firmware/pic/**/nbproject/private/
+firmware/pic/**/dist/
+firmware/pic/**/debug/
+
+# Archivos de sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
