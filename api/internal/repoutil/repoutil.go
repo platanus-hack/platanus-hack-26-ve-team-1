@@ -26,8 +26,8 @@ func Root() (string, error) {
 	}
 }
 
-// DatabaseURL devuelve DATABASE_URL del entorno o, si falta, la de .env.local
-// (acepta la URL sola o con el prefijo DATABASE_URL=).
+// DatabaseURL devuelve DATABASE_URL del entorno o, si falta, la de .env.local.
+// En .env.local acepta la línea DATABASE_URL=... (con o sin comillas) o la URL sola.
 func DatabaseURL() (string, error) {
 	if u := os.Getenv("DATABASE_URL"); u != "" {
 		return u, nil
@@ -40,9 +40,14 @@ func DatabaseURL() (string, error) {
 	if err != nil {
 		return "", errors.New("DATABASE_URL no está definido y no hay .env.local")
 	}
-	u := strings.TrimPrefix(strings.TrimSpace(string(b)), "DATABASE_URL=")
-	if u == "" {
-		return "", errors.New(".env.local está vacío")
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if v, ok := strings.CutPrefix(line, "DATABASE_URL="); ok {
+			return strings.Trim(strings.TrimSpace(v), `"'`), nil
+		}
+		if strings.HasPrefix(line, "postgres://") || strings.HasPrefix(line, "postgresql://") {
+			return line, nil
+		}
 	}
-	return u, nil
+	return "", errors.New("no hay DATABASE_URL en .env.local")
 }
