@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: slj-api
+    runtime: go
+    rootDir: api
+    buildCommand: go build -o app ./cmd/api
+    startCommand: ./app
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ISSUER_NACIONAL_KEY
+        sync: false
+      - key: ISSUER_UNIVERSIDAD_KEY
+        sync: false
+      - key: KAPSO_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: web
+    name: slj-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://slj-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

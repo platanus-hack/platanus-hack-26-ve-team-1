@@ -47,3 +47,10 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.swp
+
+# Secretos y bases locales (SoloLoJusto)
+.env.local
+.env*.local
+secrets/
+*.db
+api/app

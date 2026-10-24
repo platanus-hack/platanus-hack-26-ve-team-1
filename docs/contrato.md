@@ -1,0 +1,106 @@
+# Contrato de bytes de SoloLoJusto
+
+Fuente de verdad para la API (Go), el firmware (micro-ecc) y las PWAs (WebCrypto).
+Cualquier cambio se anuncia al equipo antes de hacerlo. Implementación de referencia:
+`api/internal/sign`; vectores: `docs/test-vectors.json`; verificador independiente: `node tools/verify.mjs`.
+
+## Reglas generales
+
+- Multibyte en **big-endian**.
+- Hash **SHA-256**. Firma **ECDSA P-256** de 64 B en formato crudo `r‖s` (IEEE P1363), cada mitad con relleno a 32 B.
+- En Go se usa `ecdsa.Sign`, no `SignASN1`.
+
+## Cabecera (16 B)
+
+| Offset | Tamaño | Campo |
+|---|---|---|
+| 0 | 1 | version = `0x01` |
+| 1 | 1 | emisor: `0x01` nacional, `0x02` universidad |
+| 2 | 1 | atributo |
+| 3 | 1 | largo = bytes de valor |
+| 4 | 4 | vence (Unix, big-endian) |
+| 8 | 8 | handle (aleatorio) |
+
+## Atributos
+
+| Código | Atributo | Valor máx. |
+|---|---|---|
+| `0x01` | Mayor de 18 | 16 B |
+| `0x02` | Mayor de 21 | 16 B |
+| `0x03` | Identidad (nombre, número V, vigencia) | 64 B |
+| `0x04` | Sangre y alergias | 16 B |
+| `0x05` | Contacto de emergencia | 16 B |
+| `0x06` | Donante y licencia | 16 B |
+
+## Firma en el chip
+
+- Mensaje firmado: `UID ‖ cabecera ‖ valor[0:largo]`. **El relleno con ceros no se firma.**
+- Registro en el chip: `cabecera(16) ‖ valor relleno a 16 (64 en identidad) ‖ firma(64)` = **96 B** (2 sectores) o **144 B** (3 sectores).
+- Se parte en bloques de 16 B, 3 bloques de datos por sector (el cuarto, el del trailer, no se usa).
+
+## Mapa de sectores
+
+| Sector | Contenido |
+|---|---|
+| 1 | Índice: `version 0x01 ‖ handle (8 B)`, relleno a 16 B, sin firma (los otros 2 bloques en cero) |
+| 2–3 | A1 Mayor de 18 |
+| 4–5 | A2 Mayor de 21 |
+| 6–8 | A3 Identidad |
+| 9–10 | A4 Sangre y alergias |
+| 11–12 | A5 Contacto de emergencia |
+| 13–14 | A6 Donante y licencia |
+| 15 | Reserva |
+
+## Credencial de billetera
+
+- Mensaje firmado: `cabecera ‖ valor[0:largo] ‖ clave pública del celular (33 B comprimida)`. **Sin UID.**
+- Blob: `cabecera ‖ valor[0:largo] ‖ pubkey33 ‖ firma64`.
+
+## QR (lo implementa P4)
+
+```
+"SLJ1:" + base64url( blob ‖ hora(4 B) ‖ firma del celular(64 B) sobre (hora ‖ atributo) ‖ atributo(1 B) )
+```
+
+Ventana de ±30 s respecto de la hora del verificador.
+
+## Claves de los emisores
+
+- `keys/issuers.json`: JWK (`kty`, `crv`, `x`, `y`) con llaves `"0x01"` y `"0x02"`.
+- `keys/issuers.h`: `ISSUER_NACIONAL_PUB[64]` e `ISSUER_UNIVERSIDAD_PUB[64]`, `X‖Y` sin el prefijo `0x04` (formato de micro-ecc).
+- Privadas: PKCS#8 DER en base64 (`secrets/<nombre>.key.b64`, fuera de git). En producción van en `ISSUER_NACIONAL_KEY` e `ISSUER_UNIVERSIDAD_KEY` con el mismo formato.
+
+## Códigos de resultado
+
+| Código | Significado |
+|---|---|
+| `01` | Aprobado |
+| `02` | Firma inválida |
+| `03` | Revocada |
+| `04` | Vencida |
+| `05` | Sin permiso |
+| `06` | Rechazado por el ciudadano |
+
+## Tablas (Postgres, `db/migrations/000001_init.up.sql`)
+
+- **citizens**: correo, hash de contraseña, rol (`ciudadano`/`emisor`/`comercio`), nombre, teléfono de WhatsApp, avisos.
+- **cards**: handle (BYTEA 8 B), UID, ciudadano, estado (`activa`/`revocada`), fechas.
+- **attributes**: handle, código, emisor, valor, vencimiento; único por (handle, código).
+- **devices**: ciudadano, handle, clave pública del celular (BYTEA 33 B).
+- **wallet_credentials**: dispositivo, handle, código, blob, vencimiento.
+- **terminals**: nombre, rol (`comercio`/`registro`/`salud`/`transito`/`emergencia`), atributo que pide, hash del token.
+- **events**: handle, terminal, atributo, resultado (1–6), `emergency` (bool), hora. Retención de 30 días.
+- **link_codes**: código de 6 dígitos, handle, vencimiento.
+
+## Nota para P4 (WebCrypto)
+
+`crypto.subtle.exportKey('raw', pub)` entrega la clave en **65 B** (`0x04 ‖ X ‖ Y`). Hay que comprimirla a 33 B:
+
+```js
+const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pub)); // 65 B
+const pub33 = new Uint8Array(33);
+pub33[0] = (raw[64] & 1) === 0 ? 0x02 : 0x03; // paridad de Y
+pub33.set(raw.subarray(1, 33), 1);            // X
+```
+
+WebCrypto firma y verifica `ECDSA` con `{ name: 'ECDSA', hash: 'SHA-256' }` directamente en `r‖s` de 64 B, sin conversión.
