@@ -25,7 +25,7 @@ func TestParseCredWalletRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Ver != verWallet || c.Issuer != 1 || c.Attr != 1 || c.Exp != 2_000_000_000 || c.Handle != testHandle {
+	if c.Ver != ver || c.Issuer != 1 || c.Attr != 1 || c.Exp != 2_000_000_000 || c.Handle != testHandle {
 		t.Fatalf("campos: %+v", c)
 	}
 	if !bytes.Equal(c.DevPub, testDevPub) || !bytes.Equal(c.Value, []byte{1}) || len(c.Sig) != sigLen {
@@ -36,17 +36,9 @@ func TestParseCredWalletRoundTrip(t *testing.T) {
 	}
 }
 
-func TestParseCredChipHasNoDevPub(t *testing.T) {
-	u := encodeUnsigned(verChip, 1, 2, 5, 9, nil, []byte{1})
-	c, err := parseCred(append(u, make([]byte, sigLen)...))
-	if err != nil || c.Ver != verChip || c.DevPub != nil || c.Handle != 9 {
-		t.Fatalf("chip: %+v %v", c, err)
-	}
-}
-
 func TestParseCredLengths(t *testing.T) {
 	for _, n := range []int{0, 1, 64, 255} {
-		raw := append(encodeUnsigned(verWallet, 1, 3, 1, 1, testDevPub, make([]byte, n)), make([]byte, sigLen)...)
+		raw := append(encodeUnsigned(1, 3, 1, 1, testDevPub, make([]byte, n)), make([]byte, sigLen)...)
 		if _, err := parseCred(raw); err != nil {
 			t.Errorf("len %d: %v", n, err)
 		}
@@ -58,7 +50,7 @@ func TestParseCredLengths(t *testing.T) {
 		}
 	}
 	bad := wallet(t, []byte{1})
-	for _, v := range []byte{0, 3} {
+	for _, v := range []byte{0, 2, 3} {
 		bad[0] = v
 		if _, err := parseCred(bad); err == nil {
 			t.Errorf("ver %d debió fallar", v)

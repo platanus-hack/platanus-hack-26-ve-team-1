@@ -51,7 +51,7 @@ func issuerPubHex() map[string]string {
 
 // issueWallet firma una credencial de billetera de prueba para devPub (33 B).
 func issueWallet(issuer, attr byte, exp uint32, handle uint64, devPub, value []byte) ([]byte, error) {
-	u := encodeUnsigned(verWallet, issuer, attr, exp, handle, devPub, value)
+	u := encodeUnsigned(issuer, attr, exp, handle, devPub, value)
 	sig, err := signRaw(testIssuer[issuer], u)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func issueWallet(issuer, attr byte, exp uint32, handle uint64, devPub, value []b
 }
 
 func presentWith(priv *ecdsa.PrivateKey, cred []byte, t uint32, attr byte) (string, error) {
-	sig, err := signRaw(priv, deviceMessage(t, cred))
+	sig, err := signRaw(priv, deviceMessage(t, attr))
 	if err != nil {
 		return "", err
 	}

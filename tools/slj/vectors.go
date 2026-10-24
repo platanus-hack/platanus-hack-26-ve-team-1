@@ -51,9 +51,9 @@ func buildVectors() (*vFile, error) {
 	hexHandle := fmt.Sprintf("%016x", testHandle)
 	cs := []vCase{
 		{Name: "valido", QR: good, Expect: CodeOK},
-		{Name: "valido_universidad_carnet", QR: pres(issue(2, 7, exp), vNow), Expect: CodeOK},
+		{Name: "valido_universidad_carnet_A3", QR: pres(issue(2, 3, exp), vNow), Expect: CodeOK},
 		{Name: "valido_limite_ventana", QR: pres(issue(1, 1, exp), vNow-30), Expect: CodeOK},
-		{Name: "emisor_alterado_valor", QR: mutate(good, func(b []byte) { b[headerLen+devPubLen] ^= 1 }), Expect: CodeBadSig},
+		{Name: "emisor_alterado_valor", QR: mutate(good, func(b []byte) { b[headerLen] ^= 1 }), Expect: CodeBadSig},
 		{Name: "firma_celular_alterada", QR: mutate(good, func(b []byte) { b[len(b)-10] ^= 1 }), Expect: CodeBadSig},
 		{Name: "vencido", QR: pres(issue(1, 1, uint32(vNow-1)), vNow), Expect: CodeExpired},
 		{Name: "revocado", QR: good, Expect: CodeRevoked, Revoked: []string{hexHandle}},
@@ -61,6 +61,8 @@ func buildVectors() (*vFile, error) {
 		{Name: "hora_futura", QR: pres(issue(1, 1, exp), vNow+40), Expect: CodeStale},
 		{Name: "attr_inconsistente", QR: mutate(good, func(b []byte) { b[len(b)-1] ^= 1 }), Expect: CodeBadFmt},
 		{Name: "sin_permiso", QR: good, Expect: CodeNoPerm, Accept: []int{2}},
+		{Name: "falsificado_y_revocado_da_firma_invalida", QR: mutate(good, func(b []byte) { b[len(b)-10] ^= 1 }), Expect: CodeBadSig, Revoked: []string{hexHandle}},
+		{Name: "vencido_y_revocado_da_vencido", QR: pres(issue(1, 1, uint32(vNow-1)), vNow), Expect: CodeExpired, Revoked: []string{hexHandle}},
 		{Name: "emisor_desconocido", QR: pres(mustIssueUnknown(devPub, exp), vNow), Expect: CodeBadFmt},
 		{Name: "prefijo_malo", QR: "SLJ2:" + strings.TrimPrefix(good, prefix), Expect: CodeBadFmt},
 		{Name: "truncado", QR: good[:len(good)-6], Expect: CodeBadFmt},
@@ -77,7 +79,7 @@ func buildVectors() (*vFile, error) {
 
 // mustIssueUnknown firma con el emisor 1 pero declara el emisor 9 (no registrado).
 func mustIssueUnknown(devPub []byte, exp uint32) []byte {
-	u := encodeUnsigned(verWallet, 9, 1, exp, testHandle, devPub, []byte{1})
+	u := encodeUnsigned(9, 1, exp, testHandle, devPub, []byte{1})
 	sig, err := signRaw(testIssuer[1], u)
 	if err != nil {
 		panic(err)

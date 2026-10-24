@@ -7,7 +7,9 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -131,8 +133,8 @@ func cmdPresent(args []string) error {
 
 func cmdVerify(args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
-	keys := fs.String("keys", "", "JSON {\"1\":\"hex65\",...}; por defecto, las claves de prueba")
-	rev := fs.String("rev", "", "archivo de revocaciones (n × 8 B)")
+	keys := fs.String("keys", "", "JSON de emisores: {\"1\":\"hex\"} o el keys/issuers.json de P1 ({\"0x01\":JWK}); por defecto, las claves de prueba")
+	rev := fs.String("rev", "", "revocaciones: binario n × 8 B o JSON {\"hs\":[handle hex,...]} como /api/revocations")
 	now := fs.Int64("now", time.Now().Unix(), "hora Unix para la verificación")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
@@ -151,8 +153,8 @@ func cmdVerify(args []string) error {
 		if err != nil {
 			return err
 		}
-		for o := 0; o+8 <= len(b); o += 8 {
-			revoked[binary.BigEndian.Uint64(b[o:])] = true
+		if err := loadRevoked(b, revoked); err != nil {
+			return err
 		}
 	}
 	res := verifyPresentation(fs.Arg(0), VerifyCtx{Issuers: issuers, Revoked: revoked, Now: *now})
@@ -171,29 +173,80 @@ func loadIssuers(path string) (map[byte]*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	raw := map[string]string{}
+	return parseIssuersJSON(b)
+}
+
+// loadRevoked acepta el blob binario (n × 8 B) o el JSON {"hs":[...]} que entrega GET /api/revocations.
+func loadRevoked(b []byte, into map[uint64]bool) error {
+	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '{' {
+		var j struct {
+			Hs []string `json:"hs"`
+		}
+		if err := json.Unmarshal(t, &j); err != nil {
+			return err
+		}
+		for _, h := range j.Hs {
+			raw, err := hex.DecodeString(h)
+			if err != nil || len(raw) != 8 {
+				return fmt.Errorf("handle inválido en la lista: %q", h)
+			}
+			into[binary.BigEndian.Uint64(raw)] = true
+		}
+		return nil
+	}
+	for o := 0; o+8 <= len(b); o += 8 {
+		into[binary.BigEndian.Uint64(b[o:])] = true
+	}
+	return nil
+}
+
+// parseIssuersJSON acepta {"1":"hex"} y el keys/issuers.json de P1: {"0x01":{kty,crv,x,y}}.
+func parseIssuersJSON(b []byte) (map[byte]*ecdsa.PublicKey, error) {
+	raw := map[string]json.RawMessage{}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, err
 	}
-	return parseIssuerMap(raw)
-}
-
-func parseIssuerMap(raw map[string]string) (map[byte]*ecdsa.PublicKey, error) {
 	m := map[byte]*ecdsa.PublicKey{}
-	for id, h := range raw {
+	for id, v := range raw {
 		var n int
 		if _, err := fmt.Sscan(id, &n); err != nil {
 			return nil, err
 		}
-		pb, err := hex.DecodeString(h)
-		if err != nil {
-			return nil, err
+		var k *ecdsa.PublicKey
+		var err error
+		var h string
+		if json.Unmarshal(v, &h) == nil {
+			var pb []byte
+			if pb, err = hex.DecodeString(h); err == nil {
+				k, err = pubFromAny(pb)
+			}
+		} else {
+			var j struct{ X, Y string }
+			if err = json.Unmarshal(v, &j); err == nil {
+				k, err = pubFromJWK(j.X, j.Y)
+			}
 		}
-		k, err := pubFromAny(pb)
 		if err != nil {
 			return nil, fmt.Errorf("emisor %s: %w", id, err)
 		}
 		m[byte(n)] = k
 	}
 	return m, nil
+}
+
+func pubFromJWK(x, y string) (*ecdsa.PublicKey, error) {
+	xb, err1 := base64.RawURLEncoding.DecodeString(x)
+	yb, err2 := base64.RawURLEncoding.DecodeString(y)
+	if err1 != nil || err2 != nil || len(xb) != 32 || len(yb) != 32 {
+		return nil, fmt.Errorf("JWK inválida")
+	}
+	return pubFromAny(append([]byte{4}, append(xb, yb...)...))
+}
+
+func parseIssuerMap(raw map[string]string) (map[byte]*ecdsa.PublicKey, error) {
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return parseIssuersJSON(b)
 }
