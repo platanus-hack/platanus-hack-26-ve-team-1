@@ -1,12 +1,34 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { ToastProvider } from './components/ui'
+import AppLayout from './layouts/AppLayout'
+import AuthLayout from './layouts/AuthLayout'
+import HomePage from './pages/HomePage'
+import IssuerPage from './pages/IssuerPage'
+import LoginPage from './pages/LoginPage'
+import MerchantPage from './pages/MerchantPage'
+import NotFoundPage from './pages/NotFoundPage'
+import RegisterPage from './pages/RegisterPage'
 import UiKitPage from './pages/UiKitPage'
+import VerifyPage from './pages/VerifyPage'
+import WalletPage from './pages/WalletPage'
 
 function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
         <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="emisor" element={<IssuerPage />} />
+            <Route path="comercio" element={<MerchantPage />} />
+            <Route path="billetera" element={<WalletPage />} />
+            <Route path="verificar" element={<VerifyPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+          <Route element={<AuthLayout />}>
+            <Route path="login" element={<LoginPage />} />
+            <Route path="registro" element={<RegisterPage />} />
+          </Route>
           <Route path="/ui-kit" element={<UiKitPage />} />
         </Routes>
       </BrowserRouter>
