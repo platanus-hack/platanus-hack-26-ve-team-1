@@ -104,3 +104,45 @@ pub33.set(raw.subarray(1, 33), 1);            // X
 ```
 
 WebCrypto firma y verifica `ECDSA` con `{ name: 'ECDSA', hash: 'SHA-256' }` directamente en `r‖s` de 64 B, sin conversión.
+
+## API (Go)
+
+Sesión: cookie `slj_session` (JWT HS256, HttpOnly, 7 días). Terminales: `Authorization: Bearer <token>`.
+Los errores son `{"ok":false,"error":"..."}`. Binarios en hex (handle 16 caracteres, clave del celular 66 caracteres).
+
+| Ruta | Quién | Cuerpo → respuesta |
+|---|---|---|
+| `POST /api/auth/register` | público | `{email,password,name,whatsapp?}` → `{ok,user}`; siempre rol ciudadano |
+| `POST /api/auth/login` · `/logout` | público | `{email,password}` → `{ok,user}` |
+| `GET /api/me` | sesión | `{ok,user}` |
+| `GET /api/citizens` | emisor | `{citizens:[{id,email,name,profile}]}` |
+| `PUT /api/citizens/{id}/profile` | emisor | perfil (abajo) → `{attributes:["A1",...]}` |
+| `POST /api/emision/request` | emisor | `{citizen_id}`; queda pendiente 10 min |
+| `POST /api/emision/start` | terminal registro, modo emitir | `{uid}` → `{h,blocks:[{s,b,d}]}` (índice primero) |
+| `POST /api/link/start` | terminal en modo vincular | `{h}` → `{c}` (6 dígitos, 2 min) |
+| `POST /api/link/confirm` | sesión | `{code,public_key}` → `{credentials:[{a,blob_hex,expires}]}`; la cédula debe ser de esa cuenta |
+| `GET /api/wallet[?public_key=hex]` | sesión | `{credentials:[...]}` vigentes, de cédulas activas |
+| `POST /api/events` | terminal | `{t:"verif",h,a,res,ts,emg}` o `{t:"tamper",ts}` → `{ok}` |
+| `GET /api/revocations` | público | `{hs:[...]}` |
+| `GET /api/issuers` | público | `{"0x01":JWK,"0x02":JWK}` |
+| `POST /api/revoke` | emisor o dueño | `{h}`; borra las credenciales de billetera |
+| `GET /api/terminal/config` | terminal | `{rol,a,local,modo}` |
+
+Credenciales de billetera derivadas: A1, A2 y A6 (si existen y no han vencido). Identidad y datos de salud no salen del chip.
+
+### Perfil del ciudadano y valores de los atributos
+
+```json
+{"birthdate":"2000-03-04","identity":{"name":"ANA PEREZ","id":"V-12345678","valid_until":"2030-01-01"},
+ "blood":"O+ penicilina","contact":"Mama 04141234567","donor_license":"D;LIC-B2"}
+```
+
+| Atributo | Valor (UTF-8) | Se emite si |
+|---|---|---|
+| A1 / A2 | `0x01` (1 B) | cumple 18 / 21 años |
+| A3 | `NOMBRE\|V-12345678\|AAAA-MM-DD` (≤ 64 B) | hay nombre y número |
+| A4 | `blood` tal cual (≤ 16 B) | no vacío |
+| A5 | `contact` tal cual (≤ 16 B) | no vacío |
+| A6 | `donor_license` tal cual (≤ 16 B) | no vacío |
+
+Todo lo firmado vence a los 365 días de la emisión.

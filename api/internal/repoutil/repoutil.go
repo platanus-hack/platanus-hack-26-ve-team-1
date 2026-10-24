@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Root sube desde el directorio actual hasta encontrar platanus-hack-project.jsonc.
@@ -23,4 +24,25 @@ func Root() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// DatabaseURL devuelve DATABASE_URL del entorno o, si falta, la de .env.local
+// (acepta la URL sola o con el prefijo DATABASE_URL=).
+func DatabaseURL() (string, error) {
+	if u := os.Getenv("DATABASE_URL"); u != "" {
+		return u, nil
+	}
+	root, err := Root()
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(filepath.Join(root, ".env.local"))
+	if err != nil {
+		return "", errors.New("DATABASE_URL no está definido y no hay .env.local")
+	}
+	u := strings.TrimPrefix(strings.TrimSpace(string(b)), "DATABASE_URL=")
+	if u == "" {
+		return "", errors.New(".env.local está vacío")
+	}
+	return u, nil
 }
