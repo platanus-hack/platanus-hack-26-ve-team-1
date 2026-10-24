@@ -8,7 +8,7 @@ export interface VerifyContext {
   revoked: Set<bigint>;
   now: number; // segundos Unix
   accept?: Set<number>; // atributos que este verificador acepta (vacío/undefined = todos)
-  seen?: Map<string, number>; // caché anti-reuso: handle:t -> t
+  seen?: Map<string, number>; // caché anti-reuso: handle:attr:t -> t
 }
 
 export interface VerifyResult {
@@ -20,7 +20,11 @@ export interface VerifyResult {
 }
 
 /**
- * Verifica un QR SLJ1 sin red. Orden: lo barato primero, firmas en paralelo al final.
+ * Verifica un QR SLJ1 sin red.
+ *
+ * Orden: formato → hora → emisor conocido → firmas (en paralelo) → vencimiento → permiso → revocación → reuso.
+ * Las firmas van antes que cualquier resultado que nombre la cédula (03, 04, 05, 01): así un QR falsificado
+ * nunca puede hacerse pasar por una cédula real en el historial. 02, 07 y 08 no se atribuyen a ningún handle.
  * El reuso se registra solo tras validar las firmas, para que un atacante no envenene la caché.
  */
 export async function verifyPresentation(qr: string, ctx: VerifyContext): Promise<VerifyResult> {
@@ -32,19 +36,20 @@ export async function verifyPresentation(qr: string, ctx: VerifyContext): Promis
 
   if (p.attr !== cred.attr) return res(RESULT.BAD_FORMAT);
   if (Math.abs(ctx.now - t) > WINDOW_SECONDS) return res(RESULT.STALE);
-  if (cred.exp < ctx.now) return res(RESULT.EXPIRED);
-  if (ctx.accept && ctx.accept.size && !ctx.accept.has(cred.attr)) return res(RESULT.NO_PERMISSION);
-  if (ctx.revoked.has(cred.handle)) return res(RESULT.REVOKED);
   const issuerKey = ctx.issuers.get(cred.issuer);
   if (!issuerKey) return res(RESULT.BAD_FORMAT);
-  const devKey = await importPublicAny(cred.devpub!);
+  const devKey = await importPublicAny(cred.devpub);
   if (!devKey) return res(RESULT.BAD_SIG);
 
   const [okIssuer, okDevice] = await Promise.all([
     verify(issuerKey, cred.sig, cred.signed),
-    verify(devKey, p.devSig, deviceMessage(t, cred.raw)),
+    verify(devKey, p.devSig, deviceMessage(t, cred.attr)),
   ]);
   if (!okIssuer || !okDevice) return res(RESULT.BAD_SIG);
+
+  if (cred.exp < ctx.now) return res(RESULT.EXPIRED);
+  if (ctx.accept && ctx.accept.size && !ctx.accept.has(cred.attr)) return res(RESULT.NO_PERMISSION);
+  if (ctx.revoked.has(cred.handle)) return res(RESULT.REVOKED);
 
   if (ctx.seen) {
     const key = `${cred.handle}:${cred.attr}:${t}`;

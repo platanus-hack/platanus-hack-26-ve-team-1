@@ -23,14 +23,26 @@ test("el script del laboratorio es JavaScript válido", () => {
   for (const s of scripts) assert.doesNotThrow(() => new vm.Script(s));
 });
 
-test("docs/p4-qr.md lista los mismos códigos de resultado y tiempos que el código", () => {
+test("docs/p4-qr.md documenta los códigos del contrato, los internos 07/08 y los tiempos", () => {
   const doc = read("docs/p4-qr.md");
-  const line = doc.split("\n").find((l) => l.includes("aprobado") && l.includes("firma inválida"))!;
-  assert.ok(line, "falta la línea de códigos de resultado");
-  const codes = [...line.matchAll(/\b0([1-9])\b/g)].map((m) => Number(m[1]));
-  for (const c of Object.values(RESULT)) assert.ok(codes.includes(c), `el doc no menciona el código ${c}`);
+  const lines = doc.split(/\r?\n/);
+  const codesOf = (l: string) => [...l.matchAll(/\b0([1-9])\b/g)].map((m) => Number(m[1]));
+  const contract = lines.find((l) => l.includes("aprobado") && l.includes("firma inválida"))!;
+  assert.ok(contract, "falta la línea de códigos del contrato");
+  for (const c of [RESULT.OK, RESULT.BAD_SIG, RESULT.REVOKED, RESULT.EXPIRED, RESULT.NO_PERMISSION]) {
+    assert.ok(codesOf(contract).includes(c), `el doc no menciona el código ${c} del contrato`);
+  }
+  const internal = lines.find((l) => /internos/i.test(l) && l.includes("07") && l.includes("08"));
+  assert.ok(internal, "el doc debe declarar 07 y 08 como internos");
   assert.ok(doc.includes(`**${ROTATE_SECONDS} s**`), "tiempo de rotación desactualizado en el doc");
   assert.ok(doc.includes(`${WINDOW_SECONDS} s`), "ventana desactualizada en el doc");
+});
+
+test("07 y 08 nunca salen del verificador: la API y el UNO solo conocen 01–06", async () => {
+  const { toVerifEvent } = await import("./index.ts");
+  for (const code of [RESULT.STALE, RESULT.BAD_FORMAT, RESULT.BAD_SIG]) {
+    assert.equal(toVerifEvent({ code, handle: 1n, attr: 1 }, 1), null, `código ${code}`);
+  }
 });
 
 test("el núcleo no tiene dependencias externas", () => {

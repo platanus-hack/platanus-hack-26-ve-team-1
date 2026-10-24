@@ -82,6 +82,21 @@ export async function importIssuers(keys: Record<number, Uint8Array>): Promise<M
   return m;
 }
 
+/** `GET /api/issuers` entrega `{"0x01":JWK,"0x02":JWK}`; se importan una sola vez. Las claves inválidas se descartan. */
+export async function importIssuersJwk(jwks: Record<string, JsonWebKey>): Promise<Map<number, CryptoKey>> {
+  const m = new Map<number, CryptoKey>();
+  for (const [id, jwk] of Object.entries(jwks)) {
+    const n = Number(id);
+    if (!Number.isInteger(n) || n < 0 || n > 255) continue;
+    try {
+      m.set(n, await crypto.subtle.importKey("jwk", { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, ALG, false, ["verify"]));
+    } catch {
+      /* clave inválida: ese emisor queda desconocido */
+    }
+  }
+  return m;
+}
+
 /** Llave del dispositivo: no extraíble (la privada nunca sale de WebCrypto). */
 export async function generateDeviceKey(): Promise<CryptoKeyPair> {
   return (await crypto.subtle.generateKey(ALG, false, ["sign", "verify"])) as CryptoKeyPair;

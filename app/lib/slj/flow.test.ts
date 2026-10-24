@@ -1,7 +1,7 @@
 // Escenarios de la demo (roadmap de P5) de punta a punta: emisión → QR → verificación sin red → outbox.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ATTR, ISSUER, RESULT, ROTATE_SECONDS, fromB64u, parseRevocations, toB64u, verifyPresentation } from "./index.ts";
+import { ATTR, ISSUER, RESULT, ROTATE_SECONDS, attrLabel, fromB64u, parseRevocations, toB64u, verifyPresentation } from "./index.ts";
 import { HANDLE, makeWorld, noNetwork, NOW } from "./test/helpers.ts";
 import { createFakeIDB } from "./test/fake-idb.ts";
 import * as store from "./store.ts";
@@ -15,18 +15,19 @@ test("Ana (mayor de 18) en el bar → aprobado", async () => {
   assert.equal(await code(qr, w.ctx({ accept: bar })), RESULT.OK);
 });
 
-test("Luis (16) solo tiene carnet: el bar no lo acepta → sin permiso", async () => {
+test("Luis (16) solo tiene carnet (A3 del emisor 2): el bar no lo acepta → sin permiso", async () => {
   const w = await makeWorld();
-  const carnet = await w.issue({ issuer: ISSUER.UNIVERSIDAD, attr: ATTR.CARNET, value: new TextEncoder().encode("LUIS") });
+  const carnet = await w.issue({ issuer: ISSUER.UNIVERSIDAD, attr: ATTR.IDENTIDAD, value: new TextEncoder().encode("LUIS|99|2030-01-01") });
   assert.equal(await code(await w.present(carnet), w.ctx({ accept: bar })), RESULT.NO_PERMISSION);
 });
 
-test("carnet universitario en un verificador que acepta el atributo 7 → aprobado, con emisor universidad", async () => {
+test("carnet universitario (A3, emisor 2) en un verificador que acepta A3 → aprobado, con emisor universidad", async () => {
   const w = await makeWorld();
-  const carnet = await w.issue({ issuer: ISSUER.UNIVERSIDAD, attr: ATTR.CARNET });
-  const r = await verifyPresentation(await w.present(carnet), w.ctx({ accept: new Set([ATTR.CARNET]) }));
+  const carnet = await w.issue({ issuer: ISSUER.UNIVERSIDAD, attr: ATTR.IDENTIDAD });
+  const r = await verifyPresentation(await w.present(carnet), w.ctx({ accept: new Set([ATTR.IDENTIDAD]) }));
   assert.equal(r.code, RESULT.OK);
   assert.equal(r.issuer, ISSUER.UNIVERSIDAD);
+  assert.equal(attrLabel(r.attr!, r.issuer!), "Carnet universitario", "A3 del emisor 2 es el carnet");
 });
 
 test("María responde BLOQUEAR: antes aprueba, y al llegar la nueva lista de revocación → revocada", async () => {
