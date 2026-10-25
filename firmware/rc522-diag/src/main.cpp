@@ -1,6 +1,6 @@
 // =============================================================================
 // rc522-diag — Prueba aislada del RC522 en el ESP32 (mismos pines que firmware/esp32)
-// Sin gateway, Nextion, hora ni consentimiento: solo el lector y la tarjeta.
+// Sin gateway, hora ni consentimiento: solo el lector y la tarjeta.
 // Monitor a 115200. Comandos: 'r' reinicia el lector y repite la prueba del bus,
 // 'g' alterna la ganancia de recepción entre la de fábrica (33 dB) y la máxima (48 dB).
 // =============================================================================

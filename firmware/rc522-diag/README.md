@@ -9,7 +9,7 @@ Síntoma: el LED del RC522 prende, pero al apoyar la tarjeta no llega nada.
 En modo verificar, `firmware/esp32` **solo sondea el lector en el estado ACERQUE**, y para llegar a ese estado hacen falta tres cosas:
 
 1. La hora del gateway (`{"t":"time","ts":...}`). Sin ella la máquina de estados queda en `STATE_SIN_HORA` y no lee tarjetas.
-2. Una solicitud aceptada: tocar Aceptar en la Nextion, o escribir `a` en el monitor.
+2. Una solicitud aceptada: `{"t":"consent","approved":true}` del gateway, o escribir `a` en el monitor.
 3. Apoyar la tarjeta **antes de 10 s** después de aceptar.
 
 Si se apoya la tarjeta sin esos pasos, no sale nada, y es lo esperado. Para probar el lector con el firmware principal existe el comando **`scan`** en el monitor serie, que no necesita hora ni consentimiento.
@@ -106,7 +106,7 @@ pio run -d firmware/esp32 -t upload
 Después de grabar: **REARME en el PIC**, abrir el gateway (o el monitor) y:
 
 1. Escribir `scan` y apoyar la tarjeta. Debe imprimir UID, tipo y el mapa de sectores.
-2. Para una verificación real: el gateway manda la hora (o pegar `{"t":"time","ts":<hora Unix>}` en el monitor), luego `a` (o Aceptar en la Nextion) y apoyar la cédula antes de 10 s.
+2. Para una verificación real: el gateway manda la hora (o pegar `{"t":"time","ts":<hora Unix>}` en el monitor), luego `a` y apoyar la cédula antes de 10 s.
 
 Si `scan` lee pero el flujo normal no, el problema está en la hora o en el consentimiento, no en el lector.
 

@@ -26,11 +26,9 @@ flowchart LR
   subgraph Campo[Terminal físico]
     Card[Tarjeta MIFARE 1K]
     FW[ESP32 + RC522\nfirmware PlatformIO]
-    Nex[Nextion\nciudadano]
-    UNO[UNO + ILI9488\ncomercio]
+    UNO[UNO + ILI9486\ncomercio]
     PIC[PIC16F13145\nguardián]
     Card <-->|NFC 13,56 MHz| FW
-    FW -->|UART| Nex
     FW -->|serial 9600, solo códigos| UNO
     FW <-->|HB / BLOQ| PIC
   end

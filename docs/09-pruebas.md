@@ -55,7 +55,7 @@ Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_t
 - [ ] Cédula de María (revocada) → `03` y WhatsApp sin botón.
 - [ ] Tarjeta alterada → `02` y WhatsApp.
 - [ ] Bar con atributo de salud → `05`.
-- [ ] Rechazar en la Nextion → `06` en pantalla y UNO; sin WhatsApp (no hay handle antes de acercar la cédula).
+- [ ] Rechazar la solicitud (`consent` con `approved:false`) → `06` en el UNO; sin WhatsApp (no hay handle antes de acercar la cédula).
 - [ ] Terminal de emergencia → lectura sin consentimiento y aviso.
 - [ ] Responder BLOQUEAR → siguiente intento da `03`.
 - [ ] Abrir la carcasa → bloqueo, voz y alerta.

@@ -50,7 +50,7 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 | RF-11 | Al acercar la tarjeta, el firmware leerá el UID, el índice (handle) y **solo** el atributo pedido, autenticando con la clave A del rol. |
 | RF-12 | El firmware verificará la firma ECDSA del emisor sin internet, la vigencia (hora del gateway) y que el handle no esté revocado. |
 | RF-13 | El firmware producirá un código `res` (01–06) y emitirá un evento `verif` con handle, atributo, resultado, hora y marca de emergencia. |
-| RF-14 | El terminal responderá con voz, pantalla del ciudadano (Nextion) y pantalla del comercio, que solo recibe códigos. |
+| RF-14 | El terminal responderá con voz y en la pantalla del comercio, que solo recibe códigos. |
 | RF-15 | Un rol sin la clave de un sector obtendrá `05` y no podrá leer el dato. |
 | RF-16 | El rol emergencia leerá sangre y contacto sin consentimiento y marcará el evento `emg = true`. |
 | RF-17 | El rechazo del ciudadano en la pantalla producirá `06`. Se registra como evento y se avisa solo si ya hay una cédula identificada (en el flujo normal el rechazo ocurre antes de acercarla y no hay handle). |

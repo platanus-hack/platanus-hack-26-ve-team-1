@@ -23,7 +23,7 @@ flowchart TD
   J -- Sí --> K{¿Vigente con la hora\ndel gateway?}
   K -- No --> R4[res 04 · Vencida]
   K -- Sí --> R1[res 01 · Aprobado]
-  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + Nextion + pantalla comercio\nsolo con códigos]
+  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + pantalla comercio\nsolo con códigos]
   S --> T[Evento verif → gateway → POST /api/events]
   T --> U([Aviso WhatsApp, ver secuencia])
 ```
