@@ -32,6 +32,13 @@ type apiFalsa struct {
 	caida    bool
 	eventos  []string // "token cuerpo"
 	uidVisto string
+
+	// Consentimiento: consentInicio es la respuesta de POST /api/consent (0 = 200 con el id 42)
+	// y consentEstados lo que devuelve GET /api/consent/42, uno por consulta (el último se repite)
+	consentInicio  int
+	consentEstados []string
+	consentPedidos []string // "token h a" de cada POST
+	consultas      int
 }
 
 func (f *apiFalsa) servidor(t *testing.T) *httptest.Server {
@@ -91,6 +98,36 @@ func (f *apiFalsa) servidor(t *testing.T) *httptest.Server {
 	}))
 	mux.HandleFunc("POST /api/link/start", terminal(func(w http.ResponseWriter, r *http.Request, _ string) {
 		responder(w, http.StatusOK, map[string]any{"ok": true, "c": f.codigo})
+	}))
+	mux.HandleFunc("POST /api/consent", terminal(func(w http.ResponseWriter, r *http.Request, token string) {
+		var in struct{ H, A string }
+		json.NewDecoder(r.Body).Decode(&in)
+		f.mu.Lock()
+		f.consentPedidos = append(f.consentPedidos, token+" "+in.H+" "+in.A)
+		inicio := f.consentInicio
+		f.mu.Unlock()
+		switch inicio {
+		case 0:
+			responder(w, http.StatusOK, map[string]any{"ok": true, "id": 42, "estado": "pendiente"})
+		case http.StatusUnprocessableEntity:
+			responder(w, inicio, map[string]any{"ok": false, "estado": "sin_whatsapp"})
+		default:
+			responder(w, inicio, map[string]any{"ok": false, "error": "cédula revocada"})
+		}
+	}))
+	mux.HandleFunc("GET /api/consent/{id}", terminal(func(w http.ResponseWriter, r *http.Request, _ string) {
+		if r.PathValue("id") != "42" {
+			responder(w, http.StatusNotFound, map[string]any{"ok": false, "error": "solicitud no encontrada"})
+			return
+		}
+		f.mu.Lock()
+		estado := "pendiente"
+		if n := len(f.consentEstados); n > 0 {
+			estado = f.consentEstados[min(f.consultas, n-1)]
+		}
+		f.consultas++
+		f.mu.Unlock()
+		responder(w, http.StatusOK, map[string]any{"ok": true, "id": 42, "estado": estado})
 	}))
 
 	srv := httptest.NewServer(mux)
@@ -382,4 +419,161 @@ func TestVinculacionEnviaElCodigo(t *testing.T) {
 	if c := l.recibir("code"); c["c"] != "123456" {
 		t.Errorf("código: %v", c)
 	}
+}
+
+// ─── Consentimiento ──────────────────────────────────────────────────────────
+
+const pedidoAna = `{"t":"pedido","h":"DB3A215CECA2B951","a":"A1"}`
+
+// consultasRapidas acorta los plazos del consentimiento. Va antes de armar: así se
+// restauran después de cerrar la conexión y sus goroutines.
+func consultasRapidas(t *testing.T, plazo time.Duration) {
+	antes, cada := plazoConsentimiento, cadaConsulta
+	plazoConsentimiento, cadaConsulta = plazo, 10*time.Millisecond
+	t.Cleanup(func() { plazoConsentimiento, cadaConsulta = antes, cada })
+}
+
+// sinMasLineas comprueba que el gateway no le envía nada más al lector.
+func (l *lectorFalso) sinMasLineas() {
+	l.t.Helper()
+	select {
+	case m := <-l.lineas:
+		l.t.Fatalf("el gateway envió %v de más", m)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestConsentimientoAprobadoPorWhatsApp(t *testing.T) {
+	consultasRapidas(t, 2*time.Second)
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar},
+		consentEstados: []string{"pendiente", "pendiente", "aprobado"}}
+	_, l, _ := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	l.enviar(pedidoAna)
+	if c := l.recibir("consent"); c["approved"] != true {
+		t.Errorf("consent: %v", c)
+	}
+	l.sinMasLineas()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.consentPedidos) != 1 || f.consentPedidos[0] != "tok-bar DB3A215CECA2B951 A1" {
+		t.Errorf("pedido a la API: %v", f.consentPedidos)
+	}
+	if f.consultas != 3 {
+		t.Errorf("se consultó %d veces; tras el aprobado no debía seguir", f.consultas)
+	}
+}
+
+func TestConsentimientoRechazadoOVencidoDa06(t *testing.T) {
+	for _, estado := range []string{"rechazado", "vencido"} {
+		t.Run(estado, func(t *testing.T) {
+			consultasRapidas(t, 2*time.Second)
+			f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}, consentEstados: []string{"pendiente", estado}}
+			_, l, _ := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+			l.sincronizar()
+
+			l.enviar(pedidoAna)
+			if c := l.recibir("consent"); c["approved"] != false {
+				t.Errorf("consent: %v", c)
+			}
+		})
+	}
+}
+
+func TestConsentimientoSinRespuestaDejaQueElLectorDe06(t *testing.T) {
+	consultasRapidas(t, 300*time.Millisecond)
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}} // siempre pendiente
+	_, l, reg := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	l.enviar(pedidoAna)
+	esperarHasta(t, 3*time.Second, "aviso de plazo vencido", func() bool { return reg.contiene("no respondió a tiempo") })
+	l.sinMasLineas()
+}
+
+func TestConsentimientoDeCedulaRevocadaSeRechaza(t *testing.T) {
+	consultasRapidas(t, 2*time.Second)
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}, consentInicio: http.StatusConflict}
+	p, l, _ := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	l.enviar(pedidoAna)
+	if c := l.recibir("consent"); c["approved"] != false {
+		t.Errorf("consent: %v", c)
+	}
+	if p.ResponderConsentimiento(true) {
+		t.Error("un rechazo de la API no debía quedar esperando la consola")
+	}
+}
+
+func TestConsentimientoSinWhatsAppPideRespuestaEnLaConsola(t *testing.T) {
+	consultasRapidas(t, 3*time.Second)
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}, consentInicio: http.StatusUnprocessableEntity}
+	p, l, reg := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	l.enviar(pedidoAna)
+	esperarHasta(t, 3*time.Second, "pedido al operador", func() bool { return reg.contiene("responda «si» o «no»") })
+	p.Consola(context.Background(), strings.NewReader("no\nsi\n"), func() {})
+	if c := l.recibir("consent"); c["approved"] != false {
+		t.Errorf("consent: %v", c)
+	}
+	if !reg.contiene("No hay ningún pedido esperando") {
+		t.Error("el segundo comando no debía responder nada")
+	}
+	l.sinMasLineas()
+}
+
+func TestConsentimientoConLaAPICaidaPideRespuestaEnLaConsola(t *testing.T) {
+	consultasRapidas(t, 3*time.Second)
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}}
+	p, l, reg := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	f.caer(true)
+	l.enviar(pedidoAna)
+	esperarHasta(t, 3*time.Second, "pedido al operador", func() bool { return reg.contiene("la API no responde") })
+	p.Consola(context.Background(), strings.NewReader("sí\n"), func() {})
+	if c := l.recibir("consent"); c["approved"] != true {
+		t.Errorf("consent: %v", c)
+	}
+}
+
+func TestConsolaSinPedidoNoRespondeNada(t *testing.T) {
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}, consentEstados: []string{"pendiente"}}
+	p, l, reg := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	// Mientras se espera la respuesta por WhatsApp, el operador no puede responder por el titular
+	l.enviar(pedidoAna)
+	esperarHasta(t, 3*time.Second, "consulta a la API", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.consentPedidos) == 1
+	})
+	p.Consola(context.Background(), strings.NewReader("si\n"), func() {})
+	if !reg.contiene("No hay ningún pedido esperando") {
+		t.Error("el «si» no debía aceptarse mientras se espera WhatsApp")
+	}
+	l.sinMasLineas()
+}
+
+func TestUnPedidoNuevoAnulaAlAnterior(t *testing.T) {
+	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar}}
+	p, l, _ := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar"}, "Bar La Esquina")
+	l.sincronizar()
+
+	ctx1, n1, fin1 := p.empezarConsentimiento(context.Background())
+	_, n2, fin2 := p.empezarConsentimiento(context.Background())
+	if ctx1.Err() == nil {
+		t.Error("el pedido anterior debía quedar cancelado")
+	}
+	p.responderConsentimiento(n1, true) // respuesta vieja: no debe llegar al lector
+	p.terminarConsentimiento(n1, fin1)
+	p.responderConsentimiento(n2, false)
+	if c := l.recibir("consent"); c["approved"] != false {
+		t.Errorf("llegó la respuesta del pedido anterior: %v", c)
+	}
+	p.terminarConsentimiento(n2, fin2)
 }

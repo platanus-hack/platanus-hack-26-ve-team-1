@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -105,6 +106,25 @@ func (c *Cliente) LinkStart(ctx context.Context, token, h string) (string, error
 	}
 	err := c.hacer(ctx, http.MethodPost, "/api/link/start", token, map[string]string{"h": h}, &out)
 	return out.C, err
+}
+
+// ConsentStart pide la autorización del titular, que la API le pregunta por WhatsApp:
+// POST /api/consent. Con el titular sin WhatsApp o con los avisos apagados responde 422.
+func (c *Cliente) ConsentStart(ctx context.Context, token, h, a string) (int64, error) {
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	err := c.hacer(ctx, http.MethodPost, "/api/consent", token, map[string]string{"h": h, "a": a}, &out)
+	return out.ID, err
+}
+
+// ConsentStatus consulta la solicitud: pendiente, aprobado, rechazado o vencido.
+func (c *Cliente) ConsentStatus(ctx context.Context, token string, id int64) (string, error) {
+	var out struct {
+		Estado string `json:"estado"`
+	}
+	err := c.hacer(ctx, http.MethodGet, "/api/consent/"+strconv.FormatInt(id, 10), token, nil, &out)
+	return out.Estado, err
 }
 
 func (c *Cliente) hacer(ctx context.Context, metodo, ruta, token string, cuerpo, salida any) error {

@@ -9,6 +9,7 @@ Une el lector (ESP32 por USB) con la API de `p1-backend`. Corre en la laptop del
 - **No pierde eventos.** Cada `verif` y `tamper` se guarda en `data/cola/` antes de enviarse a `POST /api/events`, con el token del terminal que lo generó. Reintenta con espera creciente; lo que la API rechaza (4xx) queda en `data/cola/rechazados/`.
 - **Emite cédulas.** `uid` → `POST /api/emision/start` → un `write` por bloque, esperando cada `ack` → `seal` → `written`. Si la API no tiene una emisión pendiente o falla un bloque, libera al lector con `seal` sin sellar nada.
 - **Vincula billeteras.** `link` → `POST /api/link/start` → `code`.
+- **Pide el consentimiento.** `pedido` (una lectura `01` en modo verificar) → `POST /api/consent`, que le pregunta al titular por WhatsApp → consulta `GET /api/consent/{id}` cada 1,5 s, hasta 65 s → `consent` con `approved` en true o false. Con 422 (titular sin WhatsApp o con avisos apagados) o sin red, le pide la respuesta al operador: `si` o `no` en la consola. Detalle en [`docs/consentimiento-whatsapp.md`](../docs/consentimiento-whatsapp.md).
 - **Voz (opcional).** Si existe `audio/<nombre>.wav` o `.mp3` con los nombres del roadmap (`acceso_concedido`, `cedula_revocada`, `terminal_bloqueado`…), lo reproduce.
 
 ## Configurar
@@ -38,6 +39,7 @@ Compilar requiere Go 1.26 o más nuevo; `gateway.exe` corre sin Go. Solo un prog
 | `terminal <n o nombre>` | Cambia el terminal activo; acepta el número, el nombre o el inicio del nombre (`terminal clin`) |
 | `sync` | Reenvía `time`, `rev` y `cfg` al lector |
 | `estado` | Lector, terminal activo y eventos en cola |
+| `si` / `no` | Responde un pedido de consentimiento cuando la API no pudo preguntarle al titular por WhatsApp. Mientras se espera WhatsApp no hacen nada |
 | `salir` | Cierra el gateway (también Ctrl+C) |
 
 Un mismo lector hace de bar, clínica o ambulancia en la demo: al cambiar de terminal, el gateway usa su token y le envía su `cfg` al lector.

@@ -14,6 +14,7 @@ const ayuda = `Comandos:
   terminal <n|nombre>  cambia el terminal activo (bar, clínica, ambulancia…)
   sync                 reenvía time, rev y cfg al lector
   estado               lector, terminal activo y eventos en cola
+  si / no              responde por el ciudadano cuando no se le pudo preguntar por WhatsApp
   salir                cierra el gateway`
 
 // Consola atiende los comandos del operador por la entrada estándar.
@@ -63,6 +64,11 @@ func (p *Puente) Consola(ctx context.Context, entrada io.Reader, salir func()) {
 			go p.Sincronizar(ctx, true)
 		case "estado":
 			p.log.Print(p.estado())
+		case "si", "sí", "no":
+			// Plan B: solo cuando la API no pudo preguntarle al titular por WhatsApp
+			if !p.ResponderConsentimiento(strings.ToLower(campos[0]) != "no") {
+				p.log.Printf("No hay ningún pedido esperando una respuesta en la consola")
+			}
 		case "salir":
 			salir()
 			return

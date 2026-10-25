@@ -59,7 +59,7 @@ PlatformIO puede colgarse al compilar el UNO en Windows (el antivirus congela lo
 |---|---|
 | No llega el WhatsApp | Revisar `KAPSO_*`, que la cuenta tenga teléfono y avisos activos, y el historial del portal (muestra lo mismo); usar el video de respaldo |
 | El terminal no lee | Hora enviada por el gateway (el lector no verifica sin ella), tarjeta apoyada y quieta, comando `scan`; luego diagnóstico RC522 |
-| No llega la pregunta de WhatsApp | Desde el teléfono del ciudadano, escribir "hola" al número de Kapso (ventana de 24 h); plan B: responder con `a`/`r` en el monitor serie del ESP32 (con el gateway cerrado) |
+| No llega la pregunta de WhatsApp | Si el gateway dice "solicitud N creada", la API la envió: desde el teléfono del ciudadano, escribir "hola" al número de Kapso (ventana de 24 h) y revisar el estado del mensaje en el panel de Kapso. Plan B: desactivar los avisos de la cuenta en el portal; el gateway pide `si`/`no` en su consola |
 | El UNO no cambia | Cable del GPIO25 en el pin 0 del UNO, GND común y monitor serie del UNO cerrado |
 | Terminal bloqueado | Revisar precinto (RA5 a GND) y pulsar REARME |
 | Sin internet en el evento | Compartir datos desde un celular; terminal y verificador funcionan sin red |

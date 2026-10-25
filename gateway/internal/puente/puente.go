@@ -59,6 +59,11 @@ type Puente struct {
 	ultimoHb                             time.Time
 	sincronizando, otraVez, otraCompleta bool // pedidos de sincronización durante una en curso
 
+	// Consentimiento en curso (consentimiento.go): un pedido nuevo deja sin efecto al anterior
+	consentimiento         uint64 // número del pedido en curso
+	cancelarConsentimiento context.CancelFunc
+	respuestaManual        chan bool // no nil: el pedido espera «si» o «no» en la consola
+
 	emitiendo  atomic.Bool
 	respuestas chan protocolo.Mensaje // ack y written para la emisión en curso
 }
@@ -197,6 +202,8 @@ func (p *Puente) manejar(ctx context.Context, m protocolo.Mensaje) {
 		}()
 	case "link":
 		go p.vincular(ctx, m.H)
+	case "pedido":
+		go p.consentir(ctx, m.H, string(m.A))
 	case "ack", "written":
 		if p.emitiendo.Load() {
 			select {

@@ -1,6 +1,6 @@
 # Consentimiento por WhatsApp
 
-Guía para quien implemente la parte de la API y Kapso. El lector (ESP32), la pantalla del comercio (UNO) y el contrato ya están hechos y probados en placa. Falta la API, y el gateway lo termina old-lx cuando la API esté lista.
+Guía para quien implemente la parte de la API y Kapso. El lector (ESP32), la pantalla del comercio (UNO) y el contrato ya están hechos y probados en placa. La API (sección 4) y el gateway (sección 6) también están hechos.
 
 ## 1. Qué cambió
 
@@ -225,17 +225,19 @@ El handle de Ana sale de `docs/tarjetas-prueba.json`, o de `SELECT encode(handle
 - **Ventana de 24 horas:** fuera de las 24 h desde el último mensaje del ciudadano al número de Kapso, WhatsApp no deja enviar mensajes con botones, salvo con una **plantilla aprobada por Meta**, y aprobarla tarda. Para la demo: **desde el teléfono de "Ana", escribir "hola" al número de Kapso antes de empezar.** Así funcionan los botones de consentimiento y también los de BLOQUEAR.
 - **Webhook:** en Kapso, el webhook `whatsapp.message.received` debe apuntar a `https://<api en Render>/api/webhooks/kapso`, con el mismo secreto que `KAPSO_WEBHOOK_SECRET`.
 - **Teléfonos de demo:** `go -C api run ./cmd/admin demo -ana 0424… -luis … -maria …` les asigna los números. Quien presente como Ana debe tener ese teléfono en la mano.
-- **Plan B sin internet:** el gateway tendrá los comandos `si` y `no` para responder a mano (sección 6), y en el monitor serie del ESP32 están `a` y `r`.
+- **Plan B:** si la API responde 422 (titular sin WhatsApp o con los avisos apagados) o no responde, el gateway le pide la respuesta al operador: `si` o `no` en su consola (sección 6). Para usarlo a propósito en la demo, desactivar los avisos de la cuenta del titular en el portal: la API responde 422. Con el gateway cerrado, en el monitor serie del ESP32 están `a` y `r`.
+- **La API acepta pero el mensaje no llega:** WhatsApp acepta el envío aunque después no lo entregue. El motivo (más de 24 h sin que el titular escriba al número, número de prueba de Meta que solo escribe a destinatarios autorizados, número equivocado) aparece como estado `failed` en el panel de Kapso, no como error en los logs de la API. En el gateway se ve "solicitud N creada" y, 60 s después, "venció sin respuesta".
 
-## 6. Lo que hace old-lx en el gateway (cuando la API esté lista)
+## 6. Gateway (hecho)
 
-Para que sepas qué espera el gateway de tus endpoints:
+Implementado en `gateway/internal/puente/consentimiento.go`, con el cliente en `gateway/internal/api/api.go` y el mensaje en `gateway/internal/protocolo/protocolo.go`:
 
-1. `api.Cliente.ConsentStart(ctx, token, h, a) (id int64, err error)` y `ConsentStatus(ctx, token, id) (estado string, err error)` en `gateway/internal/api/api.go`.
-2. En `puente.manejar`, `case "pedido"`: en una goroutine, llamar a `ConsentStart` y consultar `ConsentStatus` cada 1,5 s hasta `aprobado`, `rechazado` o `vencido`, o 65 s. Después enviar `{"t":"consent","approved":…}` al lector.
-3. Con 422 (`sin_whatsapp`) o sin red: avisarle al operador "responda con si o no" y aceptar los comandos de consola `si` y `no`.
-4. `protocolo.Consent(bool)` para armar la línea.
-5. Pruebas en `puente_test.go` con la `apiFalsa`.
+1. `pedido` del lector → `POST /api/consent` con el token del terminal activo. El gateway escribe "solicitud N creada" cuando la API la acepta.
+2. Consulta `GET /api/consent/{id}` cada 1,5 s hasta `aprobado` (→ `{"t":"consent","approved":true}`), `rechazado` o `vencido` (→ `approved:false`), o hasta 65 s. Pasado ese plazo no envía nada: el lector ya dio `06`.
+3. Con 422 (`sin_whatsapp`) o sin red, le pide al operador «si» o «no» en la consola. Los demás 4xx (cédula desconocida o revocada) se rechazan de inmediato, sin reintentar. Un error de red mientras consulta no corta la espera.
+4. Mientras se espera la respuesta por WhatsApp, `si`/`no` no hacen nada: el operador no puede responder por el titular.
+5. Un pedido nuevo anula al anterior, así una respuesta vieja nunca llega a una lectura nueva.
+6. Pruebas en `gateway/internal/puente/puente_test.go`: aprobado, rechazado, vencido, sin respuesta, cédula revocada, sin WhatsApp, API caída, consola sin pedido y pedido nuevo.
 
 ## 7. Documentación
 

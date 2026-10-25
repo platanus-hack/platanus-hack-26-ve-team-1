@@ -95,6 +95,8 @@ Corrida sobre la rama `integracion` (main + p1-backend + p2-esp32 + pic_guardian
 | `SLJ_INTEGRATION=1 go test ./...` con Postgres 16 en Docker y las 7 migraciones | OK (incluye avisos 01–05, emergencia, respaldo en texto, tamper, webhook y consentimiento por WhatsApp) |
 | `node tools/verify.mjs` | Todo correcto |
 | Front: `npm run lint` y `npm run build` | OK |
-| Firmware: `pio run` | No ejecutado: `pio` no está instalado en esta máquina |
+| Firmware: `pio run` | OK (ESP32, en la máquina de old-lx) |
+| Gateway: `go vet` y `go test ./...` | OK, también con `-race`; incluye el consentimiento: aprobado, rechazado, vencido, sin respuesta, cédula revocada, sin WhatsApp, API caída y pedido nuevo |
+| Consentimiento con la API real (2026-10-25) | Lector → gateway → API OK: la solicitud se crea y vence a los 60 s con `06`. El WhatsApp no llega al teléfono: pendiente en Kapso |
 | E2E con mock de Kapso | Cubierto por el notificador falso de la prueba de integración; no se corrió un mock HTTP aparte |
 | Hardware y Kapso real | Pendiente (checklist) |

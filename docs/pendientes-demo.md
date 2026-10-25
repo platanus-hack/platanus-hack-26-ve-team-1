@@ -9,7 +9,7 @@ Estado al 2026-10-25 en la rama `integracion`. Cada tarea dice quién la toma, q
 - **Lector ESP32:** lee y verifica la firma ECDSA en ~115 ms, con lista de revocación en NVS, modos verificar, emergencia, emitir y vincular, y el comando `scan` para diagnosticar tarjetas.
 - **Consentimiento después de leer:** un `01` espera la respuesta del ciudadano; `a`/`r` en la consola, o `consent` desde el gateway. Probado en placa con los vectores.
 - **UNO:** muestra espera, resultado, "Esperando autorización" y bloqueo. Probado con el ESP32 por el pin 0.
-- **Gateway en Go:** hora, revocaciones, configuración, cola de eventos en disco, emisión, vinculación y consola para cambiar de terminal. Pruebas OK.
+- **Gateway en Go:** hora, revocaciones, configuración, cola de eventos en disco, emisión, vinculación, consentimiento por WhatsApp (`pedido` → API → `consent`, con plan B `si`/`no`) y consola para cambiar de terminal. Pruebas OK.
 - **API:** pruebas OK, incluidas las de integración con Postgres según `09-pruebas.md`. Avisos de WhatsApp en cada lectura y BLOQUEAR por webhook.
 - **Web y PWA:** lint y build OK.
 - **La Nextion se eliminó** del código y la documentación.
@@ -26,7 +26,7 @@ Sin estas tareas no hay demo. En orden:
 |-|-|-|-|
 | 1 | Alimentación del RC522 a través del Q1 (sección 2.1) | old-lx | — |
 | 2 | Consentimiento en la API y Kapso ([`consentimiento-whatsapp.md`](consentimiento-whatsapp.md)) | Samuel | — |
-| 3 | `pedido`/`consent` en el gateway | old-lx | 2 |
+| 3 | ~~`pedido`/`consent` en el gateway~~ Hecho (rama `gateway-consentimiento`) | old-lx | — |
 | 4 | API desplegada en Render con la migración 000007 y el webhook de Kapso apuntando a ella | Samuel | 2 |
 | 5 | ~~Emitir las tarjetas de demo~~ Hecho: Ana y María (sección 3.2) | old-lx | — |
 | 6 | Checklist con hardware completo (sección 7) | todos | 1–5 |
@@ -108,7 +108,8 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 
 ## 5. Gateway (old-lx)
 
-- [ ] `pedido` → API → `consent` al lector, comandos de consola `si`/`no` y pruebas (sección 6 de la guía de WhatsApp).
+- [x] `pedido` → API → `consent` al lector, comandos de consola `si`/`no` y pruebas (sección 6 de la guía de WhatsApp). Probado con la API real: la solicitud se crea y el gateway consulta hasta que vence.
+- [ ] **El WhatsApp de consentimiento no llega** (2026-10-25): la API acepta la solicitud, pero el mensaje no llega al teléfono de Ana (…7407), ni con la ventana de 24 h abierta. Revisar en el panel de Kapso el estado del mensaje y su código de error (Samuel).
 - [ ] `gateway/config.local.json` con la URL de Render y los tokens de `secrets/demo.json`.
 - [ ] Probar de punta a punta: lector → gateway → API → WhatsApp → historial en la web.
 - [ ] Dejar compilado `gateway.exe` en la laptop de la demo (no se versiona).
@@ -160,4 +161,4 @@ Ya actualizado (2026-10-25): el terminal sin Nextion, sin voz y sin código de v
 3. Desde el teléfono de Ana, escribir "hola" al número de Kapso.
 4. Conectar el ESP32, pulsar REARME en el PIC y arrancar el gateway: debe mostrar "Terminal activo: Bar La Esquina".
 5. Una lectura de prueba con Ana antes de que entre el jurado.
-6. Si falla internet: compartir datos desde un celular. Si falla WhatsApp: `si`/`no` en el gateway. Si falla todo: el video de respaldo.
+6. Si falla internet: compartir datos desde un celular. Si falla WhatsApp: desactivar los avisos de la cuenta de Ana en el portal y responder `si`/`no` en el gateway. Si falla todo: el video de respaldo.

@@ -12,13 +12,17 @@ func TestMensajesCabenEnLaLinea(t *testing.T) {
 	write, _ := Write(14, 2, strings.Repeat("ff", 16))
 	seal, _ := Seal()
 	code, _ := Code("123456")
+	consent, _ := Consent(false)
 	revs, _ := Rev([]string{"7f94683ed2fff69d", "0123456789abcdef"})
 	cfg, err := Cfg("emergencia", "", strings.Repeat("Ambulancia de guardia ", 10), "emergencia")
 	if err != nil {
 		t.Fatalf("Cfg con un local largo: %v", err)
 	}
+	if string(consent) != `{"t":"consent","approved":false}` {
+		t.Errorf("consent: %s", consent)
+	}
 
-	for _, m := range append([][]byte{hora, write, seal, code, cfg}, revs...) {
+	for _, m := range append([][]byte{hora, write, seal, code, consent, cfg}, revs...) {
 		if len(m)+1 > MaxLinea {
 			t.Errorf("%s mide %d B con el \\n", m, len(m)+1)
 		}
