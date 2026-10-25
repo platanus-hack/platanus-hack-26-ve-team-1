@@ -18,6 +18,8 @@ Fuentes de verdad técnicas (no se duplican aquí):
 
 - [`contrato.md`](contrato.md): bytes de la cédula, firma, QR, API y avisos.
 - [`contrato-terminal.md`](contrato-terminal.md): serial lector↔gateway, lector↔PIC, lector↔pantalla, gateway↔API.
+- [`consentimiento-whatsapp.md`](consentimiento-whatsapp.md): guía para implementar el consentimiento por WhatsApp en la API y el gateway.
+- [`pendientes-demo.md`](pendientes-demo.md): qué falta para la demo, por responsable.
 - [`roadmap.md`](roadmap.md): plan de 36 h y reparto del equipo.
 - [`p4-qr.md`](p4-qr.md) (rama `p4-pwa`): formato de presentación QR `SLJ1`.
 
