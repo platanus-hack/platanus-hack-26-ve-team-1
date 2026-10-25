@@ -79,10 +79,13 @@ static bool autenticar(uint8_t sector, const uint8_t* clave, bool claveB) {
     return rfid.PCD_Authenticate(cmd, sector * 4 + 3, &key, &rfid.uid) == MFRC522::STATUS_OK;
 }
 
-// Tras una autenticación fallida la tarjeta deja de responder hasta volver a
-// seleccionarla. Retorna true si es la misma tarjeta (mismo UID).
+// Vuelve a seleccionar la tarjeta para autenticarla de cero: tras una autenticación
+// fallida (la tarjeta quedó inactiva) o para comprobar un trailer recién grabado (la
+// tarjeta sigue activa y no respondería a WUPA sin pasar antes por HLTA).
+// Retorna true si es la misma tarjeta (mismo UID).
 static bool reactivarTarjeta() {
     MFRC522::Uid previo = rfid.uid;
+    rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
 
     byte atqa[2];
