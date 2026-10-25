@@ -9,7 +9,7 @@ Estado al 2026-10-25 en la rama `integracion`. Cada tarea dice quién la toma, q
 - **Lector ESP32:** lee y verifica la firma ECDSA en ~115 ms, con lista de revocación en NVS, modos verificar, emergencia, emitir y vincular, y el comando `scan` para diagnosticar tarjetas.
 - **Consentimiento después de leer:** un `01` espera la respuesta del ciudadano; `a`/`r` en la consola, o `consent` desde el gateway. Probado en placa con los vectores.
 - **UNO:** muestra espera, resultado, "Esperando autorización" y bloqueo. Probado con el ESP32 por el pin 0.
-- **Gateway en Go:** hora, revocaciones, configuración, cola de eventos en disco, emisión, vinculación y consola para cambiar de terminal. Pruebas OK.
+- **Gateway en Go:** hora, revocaciones, configuración, cola de eventos en disco, emisión, vinculación, consentimiento por WhatsApp (`pedido` → API → `consent`, con plan B `si`/`no`) y consola para cambiar de terminal. Pruebas OK.
 - **API:** pruebas OK, incluidas las de integración con Postgres según `09-pruebas.md`. Avisos de WhatsApp en cada lectura y BLOQUEAR por webhook.
 - **Web y PWA:** lint y build OK.
 - **La Nextion se eliminó** del código y la documentación.
@@ -26,7 +26,7 @@ Sin estas tareas no hay demo. En orden:
 |-|-|-|-|
 | 1 | Alimentación del RC522 a través del Q1 (sección 2.1) | old-lx | — |
 | 2 | Consentimiento en la API y Kapso ([`consentimiento-whatsapp.md`](consentimiento-whatsapp.md)) | Samuel | — |
-| 3 | `pedido`/`consent` en el gateway | old-lx | 2 |
+| 3 | ~~`pedido`/`consent` en el gateway~~ Hecho (rama `gateway-consentimiento`) | old-lx | — |
 | 4 | API desplegada en Render con la migración 000007 y el webhook de Kapso apuntando a ella | Samuel | 2 |
 | 5 | ~~Emitir las tarjetas de demo~~ Hecho: Ana y María (sección 3.2) | old-lx | — |
 | 6 | Checklist con hardware completo (sección 7) | todos | 1–5 |
@@ -108,9 +108,10 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 
 ## 5. Gateway (old-lx)
 
-- [ ] `pedido` → API → `consent` al lector, comandos de consola `si`/`no` y pruebas (sección 6 de la guía de WhatsApp).
+- [x] `pedido` → API → `consent` al lector, comandos de consola `si`/`no` y pruebas (sección 6 de la guía de WhatsApp). Probado con la API real: la solicitud se crea y el gateway consulta hasta que vence.
+- [x] Consentimiento real probado de punta a punta (2026-10-25, 07:34): Ana en el bar → WhatsApp al teléfono de Ana (…7407) → **Sí** en ~5 s → `01` y UNO verde; **No** → `06` y UNO rojo. El primer envío no llegó: funcionó después de que ese teléfono le escribiera al número de Kapso (ventana de 24 h).
 - [ ] `gateway/config.local.json` con la URL de Render y los tokens de `secrets/demo.json`.
-- [ ] Probar de punta a punta: lector → gateway → API → WhatsApp → historial en la web.
+- [x] Probar de punta a punta: lector → gateway → API → WhatsApp. Falta mirar el historial en la web.
 - [ ] Dejar compilado `gateway.exe` en la laptop de la demo (no se versiona).
 
 ## 6. Web y PWA (Isabella y Samuel)
@@ -125,9 +126,9 @@ Es el de `docs/09-pruebas.md`, ajustado al flujo nuevo. Se hace con el gateway y
 
 - [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
 - [x] `scan` lee el UID y el mapa de sectores de las cédulas de Ana y María.
-- [ ] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado".
-- [ ] Ana en el bar → WhatsApp → **No** → `06` en el UNO.
-- [ ] Ana no responde en 60 s → `06`.
+- [x] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado".
+- [x] Ana en el bar → WhatsApp → **No** → `06` en el UNO.
+- [x] Ana no responde en 60 s → `06`.
 - [ ] María en el bar → `05`, sin pregunta, con WhatsApp a María.
 - [ ] Cédula revocada → `03`, sin pregunta.
 - [ ] Bar pidiendo salud → `05`.
@@ -160,4 +161,4 @@ Ya actualizado (2026-10-25): el terminal sin Nextion, sin voz y sin código de v
 3. Desde el teléfono de Ana, escribir "hola" al número de Kapso.
 4. Conectar el ESP32, pulsar REARME en el PIC y arrancar el gateway: debe mostrar "Terminal activo: Bar La Esquina".
 5. Una lectura de prueba con Ana antes de que entre el jurado.
-6. Si falla internet: compartir datos desde un celular. Si falla WhatsApp: `si`/`no` en el gateway. Si falla todo: el video de respaldo.
+6. Si falla internet: compartir datos desde un celular. Si falla WhatsApp: desactivar los avisos de la cuenta de Ana en el portal y responder `si`/`no` en el gateway. Si falla todo: el video de respaldo.

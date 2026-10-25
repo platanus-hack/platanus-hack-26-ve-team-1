@@ -155,6 +155,14 @@ func Code(c string) ([]byte, error) {
 	}{"code", c})
 }
 
+// Consent: {"t":"consent","approved":true}. Respuesta del titular a un pedido del lector.
+func Consent(approved bool) ([]byte, error) {
+	return codificar(struct {
+		T        string `json:"t"`
+		Approved bool   `json:"approved"`
+	}{"consent", approved})
+}
+
 // ─── Conexión ────────────────────────────────────────────────────────────────
 
 // Lector es la conexión con el ESP32 por el puerto serie (o un io.ReadWriter en las pruebas).
