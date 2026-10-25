@@ -105,6 +105,8 @@ Cabecera `Authorization: Bearer <TERMINAL_TOKEN>`. Respuestas en JSON.
 | `GET /api/terminal/config` | — | `{"rol":"…","a":"A1","local":"…","modo":"verificar"}` |
 | `POST /api/emision/start` | `{"uid":"04A1B2C3"}` | `{"blocks":[{"s":1,"b":0,"d":"…"}]}` |
 | `POST /api/link/start` | `{"h":"…"}` | `{"c":"123456"}` |
+| `POST /api/consent` | `{"h":"…","a":"A1"}` | `{"ok":true,"id":42,"estado":"pendiente"}`; `422 {"estado":"sin_whatsapp"}` si el titular no tiene WhatsApp; 404 cédula desconocida; 409 revocada |
+| `GET /api/consent/{id}` | — | `{"ok":true,"id":42,"estado":"pendiente\|aprobado\|rechazado\|vencido"}`; 404 si la solicitud es de otro terminal |
 
 El gateway guarda cada evento en una cola local antes de enviarlo y reintenta si la API falla.
 

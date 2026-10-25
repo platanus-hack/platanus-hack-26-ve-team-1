@@ -97,3 +97,29 @@ func TestSend(t *testing.T) {
 		t.Fatalf("error esperado: %v", err)
 	}
 }
+
+func TestConsent(t *testing.T) {
+	cases := []struct {
+		in       Incoming
+		id       int64
+		approved bool
+		ok       bool
+	}{
+		{Incoming{ButtonID: "consent:42:si"}, 42, true, true},
+		{Incoming{ButtonID: "consent:42:no"}, 42, false, true},
+		{Incoming{Text: "Sí"}, 0, true, true},
+		{Incoming{Text: " SI. "}, 0, true, true},
+		{Incoming{Text: "NO."}, 0, false, true},
+		{Incoming{ButtonID: "consent:x:si"}, 0, false, false},
+		{Incoming{ButtonID: "consent:42:quizas"}, 0, false, false},
+		{Incoming{ButtonID: "bloquear", Text: "Bloquear cédula"}, 0, false, false},
+		{Incoming{Text: "BLOQUEAR"}, 0, false, false},
+		{Incoming{Text: "hola"}, 0, false, false},
+	}
+	for _, c := range cases {
+		id, approved, ok := c.in.Consent()
+		if id != c.id || approved != c.approved || ok != c.ok {
+			t.Errorf("%+v: (%d, %v, %v), se esperaba (%d, %v, %v)", c.in, id, approved, ok, c.id, c.approved, c.ok)
+		}
+	}
+}
