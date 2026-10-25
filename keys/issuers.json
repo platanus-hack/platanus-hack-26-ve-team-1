@@ -1,0 +1,14 @@
+{
+  "0x01": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "aHgDr5ZqndbcyFkbCXk2Ue_LPKOmf0YiyUGerU9zNOQ",
+    "y": "8F95s3tXwBhANIrt3OeBupEB_hB3zmCqZDkd2fufjPU"
+  },
+  "0x02": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "DbYfQOF-kR0JgFkCNdUtIF6JMZOX5ySHN-14uADgAQ0",
+    "y": "cNJ2VSjvkIPx4tK2EFdWnAscst4Mb_ji1zOvxgVgzMk"
+  }
+}
