@@ -24,7 +24,8 @@
 
 // Guardián Físico PIC16F13145
 #define PIN_PIC_HB     26   // Salida: pulso de latido al PIC
-#define PIN_PIC_BLOQ   27   // Entrada (INPUT_PULLDOWN): ALTO = Bloqueado/Tamper
+#define PIN_PIC_BLOQ   27   // Entrada (INPUT_PULLUP): el PIC la tira a GND = normal; suelta (ALTO) o PIC
+                            // desconectado = bloqueado. Para probar sin el PIC, puentear GPIO27 a GND
 
 // LED Onboard
 #ifndef LED_BUILTIN
@@ -42,9 +43,37 @@
 #define HB_INTERVAL_MS        5000   // Latido cada 5 s (según contrato P3/PIC)
 #define PIC_TIMEOUT_MS       10000   // PIC bloquea si no ve latido en 10 s
 #define RESULT_DISPLAY_MS     3000   // Resultado en pantalla durante 3 s
-#define CONSENT_TIMEOUT_MS   10000   // Tiempo máximo para que ciudadano acepte (10 s)
+#define CONSENT_TIMEOUT_MS   10000   // Tras Aceptar, tiempo para acercar la cédula (10 s)
 #define EMERGENCY_DISPLAY_MS 15000   // Pantalla de emergencia visible 15 s
 #define LINK_CODE_DISPLAY_MS 120000  // Código de vinculación visible 2 min (120 s)
+#define EMISSION_IDLE_MS     30000   // Emisión abortada si pasan 30 s sin recibir un write
+#define CODE_WAIT_MS         15000   // Vinculación: espera del código que pide el gateway
+#define MENU_TIMEOUT_MS      15000   // El menú oculto se cierra solo si nadie elige
+#define ROL_TIMEOUT_MS        8000   // Espera de la cfg del gateway tras elegir un terminal
+#define SCAN_TIMEOUT_MS      10000   // Comando 'scan': espera de una tarjeta para el diagnóstico
+
+// ─── Pantalla Nextion (docs/hmi-nextion.md) ──────────────────────────────────
+
+// Resolución del modelo, en horizontal. Las pantallas se diseñan sobre 480 x 320
+// (NX4832T035, 3,5") y se escalan a esta medida.
+#define HMI_ANCHO 480
+#define HMI_ALTO  320
+
+// Fuentes del proyecto base de Nextion Editor, en este orden y en ISO-8859-1
+#define FUENTE_CHICA   0   // 16 px
+#define FUENTE_MEDIA   1   // 24 px
+#define FUENTE_GRANDE  2   // 32 px
+#define FUENTE_ENORME  3   // 56 px
+
+#define MENU_ZONA_PX   80     // Esquina superior izquierda (grilla de 480 x 320) que abre el menú oculto
+#define MENU_HOLD_MS   2000   // ... con una pulsación de 2 s
+
+// ─── Emisión ─────────────────────────────────────────────────────────────────
+
+// 1 = al recibir "seal", grabar los trailers con las claves por rol (keys.h).
+// Escribir mal un trailer bloquea el sector para siempre: probar primero en una
+// tarjeta de sacrificio. Con 0, las tarjetas quedan con la clave de fábrica.
+#define ESCRIBIR_TRAILERS 1
 
 // ─── Modos Operativos del Terminal ───────────────────────────────────────────
 
@@ -58,10 +87,11 @@ enum TerminalMode {
 // ─── Estados de la Máquina de Estados (FSM) ──────────────────────────────────
 
 enum TerminalState {
-    STATE_IDLE,         // Esperando solicitud o tarjeta
+    STATE_IDLE,         // Reposo: cada modo dibuja su pantalla y pasa a esperar
+    STATE_SIN_HORA,     // Sin hora del gateway: no se verifican cédulas
     STATE_SOLICITUD,    // Mostrando local y atributo pedido en p1
-    STATE_ACERQUE,      // Mostrando p2: "Acerque su cédula"
-    STATE_READING,      // Leyendo sectores del RC522
+    STATE_ACERQUE,      // Esperando la tarjeta ("Acerque su cédula")
+    STATE_READING,      // Vinculación: esperando el código del gateway
     STATE_VERIFYING,    // Verificando ECDSA, vigencia y revocación
     STATE_RESULT,       // Mostrando resultado (p4) por 3 s
     STATE_EMERGENCY,    // Mostrando datos médicos (p8) por 15 s

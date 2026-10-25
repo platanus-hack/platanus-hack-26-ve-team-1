@@ -17,7 +17,7 @@ size_t verifyBuildPayload(const uint8_t* uid, uint8_t uidLen,
     // Según contrato oficial docs/contrato.md de P1:
     // Mensaje firmado: UID || cabecera(16) || valor[0:largo] (el relleno de ceros NO se firma)
     size_t required = uidLen + 16 + attr.largo;
-    if (required > maxLen) return 0;
+    if (attr.largo > sizeof(attr.valor) || required > maxLen) return 0;
 
     size_t offset = 0;
 
@@ -66,6 +66,7 @@ bool verifyEcdsaSignature(const uint8_t* pubKey64,
 
 const char* verifyEvaluate(const uint8_t* uid, uint8_t uidLen,
                            const CedulaAttribute& attr,
+                           uint8_t atributoPedido,
                            bool authSuccess,
                            uint32_t currentTime) {
     // 1. Permiso: ¿Fallo la autenticación del sector con la clave A del rol? (05)
@@ -73,7 +74,15 @@ const char* verifyEvaluate(const uint8_t* uid, uint8_t uidLen,
         return RES_SIN_PERMISO;
     }
 
-    // 2. Firma: ¿La firma ECDSA es matemáticamente válida? (02)
+    // 2. Formato: versión 0x01, emisor nacional (el chip no lleva el carnet de la universidad)
+    // y el atributo pedido. Un registro copiado a los sectores de otro atributo trae su
+    // propio código en la cabecera firmada: sin este control, A1 pasaría por A2. (02)
+    if (attr.version != 0x01 || attr.emisor != 0x01 || attr.atributo != atributoPedido ||
+        attr.largo > largoMaximoValor(atributoPedido)) {
+        return RES_FIRMA_FALSA;
+    }
+
+    // 3. Firma: ¿La firma ECDSA es matemáticamente válida? (02)
     uint8_t payload[128];
     size_t payloadLen = verifyBuildPayload(uid, uidLen, attr, payload, sizeof(payload));
     if (payloadLen == 0) return RES_FIRMA_FALSA;
@@ -83,17 +92,17 @@ const char* verifyEvaluate(const uint8_t* uid, uint8_t uidLen,
         return RES_FIRMA_FALSA;
     }
 
-    // 3. Revocación: ¿El handle está en la lista negra de NVS? (03)
+    // 4. Revocación: ¿El handle está en la lista negra de NVS? (03)
     if (storeIsRevoked(attr.handle)) {
         return RES_REVOCADO;
     }
 
-    // 4. Vigencia: ¿El documento ya venció? (04)
+    // 5. Vigencia: ¿El documento ya venció? (04)
     // Si no se ha recibido hora del gateway aún, no se aprueban atributos con vencimiento
-    if (currentTime > 0 && attr.vence < currentTime) {
+    if (currentTime == 0 || attr.vence < currentTime) {
         return RES_VENCIDO;
     }
 
-    // 5. Todo correcto criptográfica y normativamente (01)
+    // 6. Todo correcto criptográfica y normativamente (01)
     return RES_APROBADO;
 }

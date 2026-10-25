@@ -9,12 +9,14 @@
 
 static MFRC522 rfid(PIN_RC522_SS, PIN_RC522_RST);
 static bool rc522Detected = false;
+static uint8_t rc522Version = 0x00;
 
 bool nfcInit() {
     SPI.begin(PIN_RC522_SCK, PIN_RC522_MISO, PIN_RC522_MOSI, PIN_RC522_SS);
     rfid.PCD_Init();
 
     byte version = rfid.PCD_ReadRegister(rfid.VersionReg);
+    rc522Version = version;
     // 0x91 o 0x92 = chip NXP original; 0x88 o 0x12 = clones compatibles; 0x00/0xFF = error de cableado
     if (version == 0x00 || version == 0xFF) {
         rc522Detected = false;
@@ -26,12 +28,24 @@ bool nfcInit() {
 }
 
 void nfcReinit() {
-    // Tras corte de energía por el transistor Q1 del PIC, reiniciar el chip
-    rfid.PCD_Init();
+    // Tras corte de energía por el transistor Q1 del PIC: retomar el bus y reiniciar el chip
+    nfcInit();
+}
+
+void nfcReleasePins() {
+    SPI.end();
+    pinMode(PIN_RC522_SCK, INPUT);
+    pinMode(PIN_RC522_MOSI, INPUT);
+    pinMode(PIN_RC522_SS, INPUT);
+    pinMode(PIN_RC522_RST, INPUT);
 }
 
 bool nfcIsHardwareDetected() {
     return rc522Detected;
+}
+
+uint8_t nfcGetVersion() {
+    return rc522Version;
 }
 
 bool nfcDetectCard(uint8_t* outUid, uint8_t* outUidLen) {
@@ -57,7 +71,38 @@ void nfcFinishCard() {
     rfid.PCD_StopCrypto1();
 }
 
-// Determina el sector inicial según el atributo (Sección 4.2)
+// Autentica un sector con una clave A o B
+static bool autenticar(uint8_t sector, const uint8_t* clave, bool claveB) {
+    MFRC522::MIFARE_Key key;
+    memcpy(key.keyByte, clave, 6);
+    MFRC522::PICC_Command cmd = claveB ? MFRC522::PICC_CMD_MF_AUTH_KEY_B : MFRC522::PICC_CMD_MF_AUTH_KEY_A;
+    return rfid.PCD_Authenticate(cmd, sector * 4 + 3, &key, &rfid.uid) == MFRC522::STATUS_OK;
+}
+
+// Tras una autenticación fallida la tarjeta deja de responder hasta volver a
+// seleccionarla. Retorna true si es la misma tarjeta (mismo UID).
+static bool reactivarTarjeta() {
+    MFRC522::Uid previo = rfid.uid;
+    rfid.PCD_StopCrypto1();
+
+    byte atqa[2];
+    byte atqaLen = sizeof(atqa);
+    if (rfid.PICC_WakeupA(atqa, &atqaLen) != MFRC522::STATUS_OK) return false;
+    if (!rfid.PICC_ReadCardSerial()) return false;
+
+    return rfid.uid.size == previo.size && memcmp(rfid.uid.uidByte, previo.uidByte, previo.size) == 0;
+}
+
+// Lee un bloque de 16 B del sector ya autenticado
+static bool leerBloque(uint8_t bloque, uint8_t* out16) {
+    byte buf[18];
+    byte len = sizeof(buf);
+    if (rfid.MIFARE_Read(bloque, buf, &len) != MFRC522::STATUS_OK) return false;
+    memcpy(out16, buf, 16);
+    return true;
+}
+
+// Determina el sector inicial según el atributo (Sección 4.2); 0 = atributo desconocido
 static uint8_t getSectorForAttribute(uint8_t atributo) {
     switch (atributo) {
         case ATTR_A1_MAYOR_18:  return 2;  // Sectores 2 y 3
@@ -66,153 +111,164 @@ static uint8_t getSectorForAttribute(uint8_t atributo) {
         case ATTR_A4_SALUD:     return 9;  // Sectores 9 y 10
         case ATTR_A5_CONTACTO:  return 11; // Sectores 11 y 12
         case ATTR_A6_DONANTE:   return 13; // Sectores 13 y 14
-        default:                return 2;
+        default:                return 0;
     }
 }
 
 bool nfcReadAttribute(uint8_t atributo, const String& rol,
-                      const uint8_t* uid, uint8_t uidLen,
                       CedulaAttribute& outAttr, bool& authOk) {
     authOk = false;
+    memset(&outAttr, 0, sizeof(outAttr));
     if (!rc522Detected) return false;
 
     uint8_t startSector = getSectorForAttribute(atributo);
-    uint8_t firstBlock = startSector * 4;
+    if (startSector == 0) return false;
 
-    // Clave A del rol
+    // Sin la clave del rol para ese grupo de sectores no se toca la tarjeta -> Código 05
     const uint8_t* roleKey = getKeyAForRole(rol, startSector);
-    MFRC522::MIFARE_Key key;
-    memcpy(key.keyByte, roleKey, 6);
+    if (roleKey == nullptr) return true;
 
-    // 1. Autenticar primer sector con clave A del rol
-    MFRC522::StatusCode status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, firstBlock, &key, &rfid.uid);
-    if (status != MFRC522::STATUS_OK) {
-        authOk = false;
-        return true; // Autenticación rechazada -> Código 05 (sin permiso)
+    // Registro en el chip: cabecera(16) || valor relleno (16, o 64 en identidad) || firma(64),
+    // en los 3 bloques de datos de cada sector: 2 sectores (96 B) o 3 en identidad (144 B)
+    uint8_t maxValor = largoMaximoValor(atributo);
+    uint8_t sectores = (16 + maxValor + 64) / 48;
+    uint8_t registro[144];
+
+    for (uint8_t i = 0; i < sectores; i++) {
+        uint8_t sector = startSector + i;
+        if (!autenticar(sector, roleKey, false)) {
+            return true; // Autenticación rechazada -> Código 05 (sin permiso)
+        }
+        for (uint8_t b = 0; b < 3; b++) {
+            if (!leerBloque(sector * 4 + b, registro + (i * 3 + b) * 16)) {
+                return false;
+            }
+        }
     }
 
     authOk = true;
-
-    // 2. Leer bloque de cabecera de datos (firstBlock)
-    byte buf1[18];
-    byte len1 = sizeof(buf1);
-    status = rfid.MIFARE_Read(firstBlock, buf1, &len1);
-    if (status != MFRC522::STATUS_OK) {
-        return false;
-    }
-
-    // Si la tarjeta ya tiene formato SoloLoJusto (versión 0x01)
-    if (buf1[0] == 0x01) {
-        outAttr.version  = buf1[0];
-        outAttr.emisor   = buf1[1];
-        outAttr.atributo = buf1[2];
-        outAttr.largo    = buf1[3];
-        outAttr.vence    = ((uint32_t)buf1[4] << 24) | ((uint32_t)buf1[5] << 16) | ((uint32_t)buf1[6] << 8) | buf1[7];
-        memcpy(outAttr.handle, buf1 + 8, 8);
-
-        // Leer segundo bloque (datos de valor)
-        byte buf2[18];
-        byte len2 = sizeof(buf2);
-        if (rfid.MIFARE_Read(firstBlock + 1, buf2, &len2) == MFRC522::STATUS_OK) {
-            memcpy(outAttr.valor, buf2, 16);
-        }
-
-        // Leer firma de 64 bytes (bloques siguientes o segundo sector)
-        // Autenticar segundo sector
-        uint8_t secondSector = startSector + 1;
-        uint8_t secondBlock = secondSector * 4;
-        status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, secondBlock, &key, &rfid.uid);
-        if (status == MFRC522::STATUS_OK) {
-            byte bufSig1[18], bufSig2[18], bufSig3[18], bufSig4[18];
-            byte sLen = 18;
-            rfid.MIFARE_Read(secondBlock, bufSig1, &sLen);
-            sLen = 18; rfid.MIFARE_Read(secondBlock + 1, bufSig2, &sLen);
-            sLen = 18; rfid.MIFARE_Read(secondBlock + 2, bufSig3, &sLen);
-
-            memcpy(outAttr.firma, bufSig1, 16);
-            memcpy(outAttr.firma + 16, bufSig2, 16);
-            memcpy(outAttr.firma + 32, bufSig3, 16);
-            // Cuarto fragmento si estuviera en bloque 3
-        }
-    } else {
-        // Tarjeta virgen o de prueba física sin formato:
-        // Cargar datos canónicos de prueba vinculados al UID físico detectado
-        outAttr.version = 0x01;
-        outAttr.emisor = 0x01;
-        outAttr.atributo = atributo;
-        outAttr.largo = 13;
-        outAttr.vence = 1735689600; // 2025-01-01
-        
-        // Handle derivado del UID
-        memset(outAttr.handle, 0, 8);
-        memcpy(outAttr.handle, uid, (uidLen <= 8) ? uidLen : 8);
-
-        const char* val = "MAYOR_DE_EDAD";
-        memset(outAttr.valor, 0, 16);
-        memcpy(outAttr.valor, val, strlen(val));
-
-        // Firma válida precalculada para testing
-        static const uint8_t DEFAULT_SIG[64] = {
-            0xE5, 0xCE, 0x10, 0x2C, 0x60, 0x43, 0xC0, 0x68, 0x86, 0x3A, 0x85, 0xC4,
-            0xD0, 0xE6, 0x57, 0xA5, 0x90, 0x9C, 0x6C, 0xD4, 0x4F, 0x7E, 0x0A, 0x73,
-            0xFB, 0x41, 0xD8, 0xD0, 0x27, 0xEA, 0xAC, 0x25, 0x2D, 0x0A, 0x87, 0x6F,
-            0x58, 0x26, 0x2D, 0x3A, 0x4C, 0xB1, 0x9A, 0x63, 0x66, 0xD7, 0xDF, 0xD8,
-            0xE2, 0x86, 0x9B, 0x8B, 0x62, 0x93, 0x26, 0xFC, 0x47, 0xB3, 0xFD, 0xE1,
-            0xC1, 0x2B, 0x11, 0x24
-        };
-        memcpy(outAttr.firma, DEFAULT_SIG, 64);
-    }
-
+    outAttr.version  = registro[0];
+    outAttr.emisor   = registro[1];
+    outAttr.atributo = registro[2];
+    outAttr.largo    = registro[3];
+    outAttr.vence    = ((uint32_t)registro[4] << 24) | ((uint32_t)registro[5] << 16) | ((uint32_t)registro[6] << 8) | registro[7];
+    memcpy(outAttr.handle, registro + 8, 8);
+    memcpy(outAttr.valor, registro + 16, maxValor);
+    memcpy(outAttr.firma, registro + 16 + maxValor, 64);
     return true;
 }
 
-bool nfcReadHandle(const uint8_t* uid, uint8_t uidLen, uint8_t* outHandle8) {
+bool nfcReadHandle(uint8_t* outHandle8) {
     if (!rc522Detected) return false;
 
-    // Sector 1 (Índice), bloque 4
-    MFRC522::MIFARE_Key key;
-    memcpy(key.keyByte, KEY_DEFAULT, 6);
-
-    MFRC522::StatusCode status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 4, &key, &rfid.uid);
-    if (status != MFRC522::STATUS_OK) {
-        // Probar con clave A del índice
-        memcpy(key.keyByte, KEY_A_INDEX, 6);
-        status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 4, &key, &rfid.uid);
-        if (status != MFRC522::STATUS_OK) {
+    // Sector 1 (Índice): clave del índice en cédulas selladas, de fábrica si aún no tiene trailer
+    if (!autenticar(1, KEY_A_INDEX, false)) {
+        if (!reactivarTarjeta() || !autenticar(1, KEY_DEFAULT, false)) {
             return false;
         }
     }
 
-    byte buf[18];
-    byte len = sizeof(buf);
-    status = rfid.MIFARE_Read(4, buf, &len);
-    if (status == MFRC522::STATUS_OK && buf[0] == 0x01) {
-        memcpy(outHandle8, buf + 8, 8);
-        return true;
+    // Bloque 4: version 0x01 || handle(8) || relleno
+    uint8_t bloque[16];
+    if (!leerBloque(4, bloque) || bloque[0] != 0x01) {
+        return false; // No es una cédula
     }
 
-    // Si está virgen, usar UID como handle
-    memset(outHandle8, 0, 8);
-    memcpy(outHandle8, uid, (uidLen <= 8) ? uidLen : 8);
+    memcpy(outHandle8, bloque + 1, 8);
     return true;
 }
 
 bool nfcWriteBlock(uint8_t blockNum, const uint8_t* data16) {
     if (!rc522Detected) return false;
 
-    // Para escribir, autenticar con Clave de fábrica o Clave B
-    MFRC522::MIFARE_Key key;
-    memcpy(key.keyByte, KEY_DEFAULT, 6);
-
-    MFRC522::StatusCode status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, blockNum, &key, &rfid.uid);
-    if (status != MFRC522::STATUS_OK) {
-        memcpy(key.keyByte, KEY_B_EMISOR, 6);
-        status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_B, blockNum, &key, &rfid.uid);
-        if (status != MFRC522::STATUS_OK) {
+    // Tarjeta virgen: clave de fábrica. Sector ya sellado (reemisión): clave B del emisor
+    uint8_t sector = blockNum / 4;
+    if (!autenticar(sector, KEY_DEFAULT, false)) {
+        if (!reactivarTarjeta() || !autenticar(sector, KEY_B_EMISOR, true)) {
             return false;
         }
     }
 
-    status = rfid.MIFARE_Write(blockNum, (byte*)data16, 16);
-    return (status == MFRC522::STATUS_OK);
+    if (rfid.MIFARE_Write(blockNum, (byte*)data16, 16) != MFRC522::STATUS_OK) {
+        return false;
+    }
+
+    // Releer y comparar
+    uint8_t leido[16];
+    return leerBloque(blockNum, leido) && memcmp(leido, data16, 16) == 0;
+}
+
+bool nfcWriteTrailer(uint8_t sector, const uint8_t* keyA6, const uint8_t* access4, const uint8_t* keyB6) {
+    if (!rc522Detected || sector == 0 || sector > 15) return false;
+
+    // Trailer de fábrica (FF 07 80): la clave A por defecto puede reescribirlo.
+    // Sector ya sellado: solo la clave B
+    if (!autenticar(sector, KEY_DEFAULT, false)) {
+        if (!reactivarTarjeta() || !autenticar(sector, KEY_B_EMISOR, true)) {
+            return false;
+        }
+    }
+
+    uint8_t trailer[16];
+    memcpy(trailer, keyA6, 6);
+    memcpy(trailer + 6, access4, 4);
+    memcpy(trailer + 10, keyB6, 6);
+    if (rfid.MIFARE_Write(sector * 4 + 3, trailer, 16) != MFRC522::STATUS_OK) {
+        return false;
+    }
+
+    // Comprobar que la nueva clave A abre el sector
+    return reactivarTarjeta() && autenticar(sector, keyA6, false);
+}
+
+uint8_t nfcProbeChip() {
+    if (!rc522Detected) {
+        nfcInit();
+    } else {
+        rc522Version = rfid.PCD_ReadRegister(rfid.VersionReg);
+        rc522Detected = !(rc522Version == 0x00 || rc522Version == 0xFF);
+    }
+    return rc522Version;
+}
+
+// Como PICC_IsNewCardPresent(), pero con WUPA: responden también las tarjetas en HALT
+static bool despertarTarjeta() {
+    byte atqa[2];
+    byte atqaLen = sizeof(atqa);
+    rfid.PCD_WriteRegister(rfid.TxModeReg, 0x00);
+    rfid.PCD_WriteRegister(rfid.RxModeReg, 0x00);
+    rfid.PCD_WriteRegister(rfid.ModWidthReg, 0x26);
+    MFRC522::StatusCode st = rfid.PICC_WakeupA(atqa, &atqaLen);
+    return st == MFRC522::STATUS_OK || st == MFRC522::STATUS_COLLISION;
+}
+
+bool nfcDiagnose(NfcDiagnostico& d) {
+    memset(&d, 0, sizeof(d));
+    if (!rc522Detected) return false;
+    if (!despertarTarjeta() || !rfid.PICC_ReadCardSerial()) return false;
+
+    d.uidLen = rfid.uid.size;
+    memcpy(d.uid, rfid.uid.uidByte, rfid.uid.size);
+    d.sak = rfid.uid.sak;
+    MFRC522::PICC_Type tipo = MFRC522::PICC_GetType(rfid.uid.sak);
+    d.tipo = MFRC522::PICC_GetTypeName(tipo);
+    d.clasica = tipo == MFRC522::PICC_TYPE_MIFARE_MINI || tipo == MFRC522::PICC_TYPE_MIFARE_1K ||
+                tipo == MFRC522::PICC_TYPE_MIFARE_4K;
+
+    for (uint8_t s = 1; s <= 14 && d.clasica; s++) {
+        if (autenticar(s, KEY_DEFAULT, false)) {
+            d.sector[s] = SECTOR_FABRICA;
+        } else if (reactivarTarjeta() && autenticar(s, getKeyAForSector(s), false)) {
+            d.sector[s] = SECTOR_ROL;
+        } else {
+            d.sector[s] = SECTOR_NO_ABRE;
+            if (!reactivarTarjeta()) break; // Se retiró: el resto queda sin probar
+        }
+        if (s == 1 && d.sector[1] != SECTOR_NO_ABRE) {
+            d.indiceLeido = leerBloque(4, d.bloque4);
+        }
+    }
+
+    nfcFinishCard();
+    return true;
 }

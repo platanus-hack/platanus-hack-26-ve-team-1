@@ -36,22 +36,35 @@ static const uint8_t KEY_A_SALUD[6] = { 0x5A, 0x10, 0xD0, 0x5A, 0x10, 0xD0 };
 // Clave A del Rol Registro / Policía (Sectores 6-8: A3 Identidad completa)
 static const uint8_t KEY_A_REGISTRO[6] = { 0x8E, 0x61, 0x57, 0x80, 0x01, 0x02 };
 
-// Clave A del Rol Tránsito (Sectores 13-14: A6 Donante y licencia)
-static const uint8_t KEY_A_TRANSITO[6] = { 0x78, 0x41, 0x53, 0x17, 0x06, 0x07 };
+// Clave A de Licencia (Sectores 13-14: A6 Donante y licencia), compartida por salud y tránsito
+static const uint8_t KEY_A_LICENCIA[6] = { 0x78, 0x41, 0x53, 0x17, 0x06, 0x07 };
 
 // Clave B de Emisión (Solo el emisor puede escribir bloques y trailers)
 static const uint8_t KEY_B_EMISOR[6] = { 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5 };
 
-// Retorna la clave A correspondiente según el rol activo y el sector
-inline const uint8_t* getKeyAForRole(const String& rol, uint8_t sector) {
+// Bits de acceso del trailer (+ GPB 0x69): datos legibles con A o B y escribibles solo
+// con B; claves y bits solo cambiables con B; la clave B no se puede leer.
+static const uint8_t ACCESS_BITS[4] = { 0x78, 0x77, 0x88, 0x69 };
+
+// Clave A que protege cada sector (mapa de sectores de docs/contrato.md).
+// nullptr = sector sin datos de la cédula (0 y 15): nunca se le graba trailer.
+inline const uint8_t* getKeyAForSector(uint8_t sector) {
     if (sector == 1) return KEY_A_INDEX;
-    if (rol == "bar" || rol == "hotel" || rol == "comercio") {
-        if (sector >= 2 && sector <= 5) return KEY_A_COMERCIO;
-    } else if (rol == "salud" || rol == "paramedico" || rol == "hospital") {
-        if (sector >= 9 && sector <= 14) return KEY_A_SALUD;
-    } else if (rol == "registro") {
-        if (sector >= 6 && sector <= 8) return KEY_A_REGISTRO;
-    }
-    // Fallback a clave de fábrica si no hay clave especializada
-    return KEY_DEFAULT;
+    if (sector >= 2 && sector <= 5) return KEY_A_COMERCIO;
+    if (sector >= 6 && sector <= 8) return KEY_A_REGISTRO;
+    if (sector >= 9 && sector <= 12) return KEY_A_SALUD;
+    if (sector >= 13 && sector <= 14) return KEY_A_LICENCIA;
+    return nullptr;
+}
+
+// Retorna la clave A con la que el rol lee ese sector, o nullptr si el rol no tiene
+// permiso (código 05). Roles del backend: comercio, registro, salud, transito, emergencia.
+inline const uint8_t* getKeyAForRole(const String& rol, uint8_t sector) {
+    bool permitido = false;
+    if (sector == 1) permitido = true;  // Índice: todos los terminales
+    else if (sector >= 2 && sector <= 5) permitido = (rol == "comercio");
+    else if (sector >= 6 && sector <= 8) permitido = (rol == "registro");
+    else if (sector >= 9 && sector <= 12) permitido = (rol == "salud" || rol == "emergencia");
+    else if (sector >= 13 && sector <= 14) permitido = (rol == "salud" || rol == "transito");
+    return permitido ? getKeyAForSector(sector) : nullptr;
 }

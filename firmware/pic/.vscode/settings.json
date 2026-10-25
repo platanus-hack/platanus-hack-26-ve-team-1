@@ -1,0 +1,10 @@
+{
+    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\guardian\\default",
+    "memory-inspector.debugTypes": [
+        "arm-debugger",
+        "embedded-debug",
+        "gdb",
+        "gdbtarget",
+        "mplab-core-da"
+    ]
+}
