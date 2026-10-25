@@ -109,9 +109,9 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 ## 5. Gateway (old-lx)
 
 - [x] `pedido` → API → `consent` al lector, comandos de consola `si`/`no` y pruebas (sección 6 de la guía de WhatsApp). Probado con la API real: la solicitud se crea y el gateway consulta hasta que vence.
-- [ ] **El WhatsApp de consentimiento no llega** (2026-10-25): la API acepta la solicitud, pero el mensaje no llega al teléfono de Ana (…7407), ni con la ventana de 24 h abierta. Revisar en el panel de Kapso el estado del mensaje y su código de error (Samuel).
+- [x] Consentimiento real probado de punta a punta (2026-10-25, 07:34): Ana en el bar → WhatsApp al teléfono de Ana (…7407) → **Sí** en ~5 s → `01` y UNO verde; **No** → `06` y UNO rojo. El primer envío no llegó: funcionó después de que ese teléfono le escribiera al número de Kapso (ventana de 24 h).
 - [ ] `gateway/config.local.json` con la URL de Render y los tokens de `secrets/demo.json`.
-- [ ] Probar de punta a punta: lector → gateway → API → WhatsApp → historial en la web.
+- [x] Probar de punta a punta: lector → gateway → API → WhatsApp. Falta mirar el historial en la web.
 - [ ] Dejar compilado `gateway.exe` en la laptop de la demo (no se versiona).
 
 ## 6. Web y PWA (Isabella y Samuel)
@@ -126,9 +126,9 @@ Es el de `docs/09-pruebas.md`, ajustado al flujo nuevo. Se hace con el gateway y
 
 - [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
 - [x] `scan` lee el UID y el mapa de sectores de las cédulas de Ana y María.
-- [ ] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado".
-- [ ] Ana en el bar → WhatsApp → **No** → `06` en el UNO.
-- [ ] Ana no responde en 60 s → `06`.
+- [x] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado".
+- [x] Ana en el bar → WhatsApp → **No** → `06` en el UNO.
+- [x] Ana no responde en 60 s → `06`.
 - [ ] María en el bar → `05`, sin pregunta, con WhatsApp a María.
 - [ ] Cédula revocada → `03`, sin pregunta.
 - [ ] Bar pidiendo salud → `05`.

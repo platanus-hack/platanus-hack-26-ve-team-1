@@ -72,10 +72,10 @@ Los casos 13–24 están automatizados en `notify_test.go`, `kapso_test.go` y `k
 - [x] Consentimiento simulado en placa (`a`/`r`): `01` → "Esperando autorización" en el UNO → verde o rojo.
 - [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
 - [ ] Antes de empezar: Ana escribe "hola" al número de Kapso (ventana de 24 h para los botones) y el webhook apunta a `/api/webhooks/kapso`.
-- [ ] Ana en el bar → "Esperando autorización" → WhatsApp → **Sí** → aprobado en el UNO.
+- [x] Ana en el bar → "Esperando autorización" → WhatsApp → **Sí** → aprobado en el UNO.
 - [ ] Tras aprobar, Ana recibe la pregunta y la confirmación, sin el aviso "se autorizó el acceso" duplicado.
 - [ ] Sin WhatsApp o sin internet: el gateway avisa al operador y `si`/`no` por consola resuelven el pedido.
-- [ ] Ana en el bar → WhatsApp → **No** → `06`; sin respuesta en 60 s → `06`.
+- [x] Ana en el bar → WhatsApp → **No** → `06`; sin respuesta en 60 s → `06`.
 - [ ] María en el bar → `05` (su cédula no tiene el dato "Mayor de 18").
 - [ ] Cédula revocada → `03` y WhatsApp sin botón.
 - [ ] Tarjeta alterada → `02` y WhatsApp.
@@ -97,6 +97,6 @@ Corrida sobre la rama `integracion` (main + p1-backend + p2-esp32 + pic_guardian
 | Front: `npm run lint` y `npm run build` | OK |
 | Firmware: `pio run` | OK (ESP32, en la máquina de old-lx) |
 | Gateway: `go vet` y `go test ./...` | OK, también con `-race`; incluye el consentimiento: aprobado, rechazado, vencido, sin respuesta, cédula revocada, sin WhatsApp, API caída y pedido nuevo |
-| Consentimiento con la API real (2026-10-25) | Lector → gateway → API OK: la solicitud se crea y vence a los 60 s con `06`. El WhatsApp no llega al teléfono: pendiente en Kapso |
+| Consentimiento con la API real (2026-10-25) | OK de punta a punta: **Sí** → `01` en ~5 s, **No** → `06`, sin respuesta → `06` a los 60 s. El primer envío no llegó: hubo que abrir la ventana de 24 h escribiéndole al número de Kapso |
 | E2E con mock de Kapso | Cubierto por el notificador falso de la prueba de integración; no se corrió un mock HTTP aparte |
 | Hardware y Kapso real | Pendiente (checklist) |
