@@ -1,0 +1,72 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --animate-event-in: event-in 0.8s ease-out;
+
+  @keyframes event-in {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+      background-color: var(--color-primary-100);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      background-color: transparent;
+    }
+  }
+
+  /* Primario: azul profundo */
+  --color-primary-50: #eef4ff;
+  --color-primary-100: #dce8ff;
+  --color-primary-200: #b9d0ff;
+  --color-primary-300: #8aafff;
+  --color-primary-400: #5483f5;
+  --color-primary-500: #2f5fd6;
+  --color-primary-600: #1d46b0;
+  --color-primary-700: #16358a;
+  --color-primary-800: #11296b;
+  --color-primary-900: #0b1c4d;
+  --color-primary-950: #071235;
+
+  /* Acento: aprobado */
+  --color-approved-50: #ecfdf3;
+  --color-approved-100: #d1fadf;
+  --color-approved-500: #12a150;
+  --color-approved-600: #0b8a42;
+  --color-approved-700: #0a6e36;
+  --color-approved-900: #064a25;
+
+  /* Denegado */
+  --color-denied-50: #fef2f2;
+  --color-denied-100: #fee2e2;
+  --color-denied-500: #e03131;
+  --color-denied-600: #c42222;
+  --color-denied-700: #a11a1a;
+  --color-denied-900: #6b1010;
+
+  /* Neutros */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+}
+
+@layer base {
+  html {
+    font-size: 18px;
+  }
+
+  body {
+    @apply bg-neutral-50 font-sans text-neutral-900 antialiased;
+  }
+}
