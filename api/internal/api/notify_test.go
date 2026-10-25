@@ -36,3 +36,15 @@ func TestUseMessage(t *testing.T) {
 		t.Errorf("un resultado desconocido no debe generar aviso: %q", body)
 	}
 }
+
+func TestConsentMessage(t *testing.T) {
+	got := consentMessage("Ana", "Bar La Esquina", 1)
+	for _, w := range []string{"Hola Ana", "Bar La Esquina pide 'Mayor de 18'", "¿Lo compartes?"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("falta %q en %q", w, got)
+		}
+	}
+	if got := consentMessage("", "X", 4); !strings.HasPrefix(got, "Hola: X pide 'Sangre y alergias'") {
+		t.Errorf("sin nombre: %q", got)
+	}
+}

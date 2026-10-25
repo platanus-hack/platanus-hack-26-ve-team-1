@@ -63,6 +63,56 @@ sequenceDiagram
   API->>K: "Tu cédula fue bloqueada…"
 ```
 
+### Diagrama de secuencia (consentimiento por WhatsApp)
+
+Ocurre entre la verificación y el registro cuando el resultado es `01` (detalle en [consentimiento-whatsapp.md](consentimiento-whatsapp.md)).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Ana as Ciudadano
+  participant FW as Lector (ESP32)
+  participant GW as Gateway
+  participant API as API Go
+  participant DB as Postgres
+  participant K as Kapso / WhatsApp
+
+  FW->>FW: Lee y verifica la cédula: 01
+  FW->>GW: {"t":"pedido","h":"…","a":"A1"}
+  FW-->>FW: Pantalla del comercio: Esperando autorización
+  GW->>API: POST /api/consent {h, a}
+  API->>DB: INSERT consent_requests (pendiente, expira en 60 s)
+  API-->>GW: {"id":42,"estado":"pendiente"}
+  API->>K: Mensaje con botones Sí / No
+  K->>Ana: "Bar La Esquina pide 'Mayor de 18'. ¿Lo compartes?"
+  loop cada 1,5 s hasta 60 s
+    GW->>API: GET /api/consent/42
+    API-->>GW: pendiente
+  end
+  Ana->>K: Toca «Sí, compartir» (consent:42:si)
+  K->>API: POST /api/webhooks/kapso (HMAC)
+  API->>DB: UPDATE solo si sigue pendiente, no venció y el teléfono coincide
+  API->>K: "Listo: compartiste 'Mayor de 18' con Bar La Esquina."
+  GW->>API: GET /api/consent/42
+  API-->>GW: aprobado
+  GW->>FW: {"t":"consent","approved":true}
+  FW-->>FW: Pantalla del comercio: Aprobado
+  FW->>GW: {"t":"verif",…,"res":"01"}
+  GW->>API: POST /api/events
+```
+
+Casos que cambian el desenlace:
+
+| Situación | API | Resultado en el lector |
+|---|---|---|
+| El ciudadano toca **No** | `rechazado`; "No se compartió nada." | `06` |
+| Pasan 60 s sin respuesta | `vencido` (pendiente con `expires_at` vencido); una respuesta tardía se ignora | `06` |
+| Sin teléfono o con avisos apagados | `422 sin_whatsapp` | El gateway avisa al operador, que responde a mano (`si`/`no`) |
+| Responde otro teléfono o repite la respuesta | Se ignora: gana la primera respuesta del titular | Sin cambio |
+| Otro terminal consulta el `id` | `404` | — |
+
+El aviso de uso (`useMessage`) no se repite: con una solicitud de los últimos 2 minutos para ese handle y terminal ya respondida, un `01` o `06` no genera segundo mensaje. Un `06` por tiempo agotado sí avisa: "La solicitud de {local} venció y no se compartió nada."
+
 ### Qué recibe el ciudadano según el resultado
 
 | `res` | Situación | Mensaje | Botón Bloquear |

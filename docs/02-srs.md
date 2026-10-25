@@ -54,6 +54,8 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 | RF-15 | Un rol sin la clave de un sector obtendrá `05` y no podrá leer el dato. |
 | RF-16 | El rol emergencia leerá sangre y contacto sin consentimiento y marcará el evento `emg = true`. |
 | RF-17 | Un resultado `01` no se mostrará ni se registrará hasta que el ciudadano lo autorice por WhatsApp. Si lo rechaza o no responde en 60 s, el resultado será `06`, que se registra con el handle de la cédula y se avisa. Los resultados `02`–`05` se muestran sin preguntar. |
+| RF-18 | `POST /api/consent` registrará la solicitud (pendiente, 60 s) y preguntará al titular por WhatsApp con botones Sí/No; `GET /api/consent/{id}` informará `pendiente`, `aprobado`, `rechazado` o `vencido` solo al terminal que la creó. Sin teléfono o con avisos apagados responderá `422 sin_whatsapp`. |
+| RF-19 | Solo contará la primera respuesta del titular a una solicitud pendiente y vigente; las respuestas de otro teléfono, repetidas o tardías se ignoran. |
 
 ### Registro y avisos
 | ID | Requisito |
@@ -126,6 +128,7 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 |---|---|---|
 | RF-02, RNF-05 | `api/internal/sign` | `sign_attribute_test.go`, `tools/verify.mjs` |
 | RF-20, RF-21, RF-22, RF-23 | `api/internal/api/events.go`, `notify.go` | `notify_test.go`, `kapso_integration_test.go` |
+| RF-18, RF-19 | `api/internal/api/consent.go`, `notify.go`, `kapso.go` (`Incoming.Consent`) | `notify_test.go`, `kapso_test.go`, `kapso_integration_test.go` |
 | RF-30, RF-31 | `api/internal/kapso`, `notify.go` | `kapso_test.go`, `kapso_integration_test.go` |
 | RF-32, RF-33 | `events.go` (`revoke`), `cards.go` | `integration_test.go` |
 | RF-50, RF-53 | `history.go`, `citizen.go`, `profile.go` | `history_integration_test.go`, `front_integration_test.go` |

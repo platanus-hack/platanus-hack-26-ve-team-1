@@ -1,5 +1,5 @@
 // retention borra los eventos de más de RETENTION_DAYS días (30 por defecto) y limpia
-// códigos de vinculación y solicitudes de emisión vencidos. Pensado para un Cron Job de Render.
+// códigos de vinculación, solicitudes de emisión y solicitudes de consentimiento vencidos. Pensado para un Cron Job de Render.
 package main
 
 import (
@@ -42,6 +42,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("borrar solicitudes: %v", err)
 	}
-	fmt.Printf("retención de %d días: %d eventos, %d códigos y %d solicitudes borrados\n",
-		days, ev.RowsAffected(), lc.RowsAffected(), ir.RowsAffected())
+	cr, err := db.Exec(ctx, `DELETE FROM consent_requests WHERE created_at < now() - make_interval(days => $1)`, days)
+	if err != nil {
+		log.Fatalf("borrar consentimientos: %v", err)
+	}
+	fmt.Printf("retención de %d días: %d eventos, %d códigos, %d solicitudes de emisión y %d de consentimiento borrados\n",
+		days, ev.RowsAffected(), lc.RowsAffected(), ir.RowsAffected(), cr.RowsAffected())
 }

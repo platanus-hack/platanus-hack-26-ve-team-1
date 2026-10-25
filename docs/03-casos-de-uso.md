@@ -53,10 +53,11 @@ flowchart LR
   2. Se autentica en los sectores del atributo con la clave del rol y lee el registro.
   3. Verifica firma del emisor, vigencia y que el handle no esté revocado.
   4. Resultado `01`: la pantalla del comercio muestra "Esperando autorización" y el ciudadano recibe por WhatsApp "{local} pide '{dato}'. ¿Lo compartes?".
-  5. El ciudadano toca **Sí**: la pantalla del comercio muestra el visto bueno.
+  5. El ciudadano toca **Sí**: la pantalla del comercio muestra el visto bueno. Por detrás, el gateway abre la solicitud con `POST /api/consent` y la consulta con `GET /api/consent/{id}` hasta que se aprueba, se rechaza o vence.
   6. Se envía el evento `verif` a la API (vía gateway) → CU-02.
 - **Flujos alternos:**
   - A1 (`06`): el ciudadano toca **No** o no responde en 60 s; no se entrega el dato y se registra `06` con el handle.
+  - A1b: el titular no tiene WhatsApp o tiene los avisos apagados (`422 sin_whatsapp`): el gateway avisa al operador, que responde a mano con `si` o `no`.
   - A2 (`05`): el rol no tiene la clave del sector; no se lee el dato.
   - A3 (`02`): la firma no coincide (tarjeta alterada o copiada).
   - A4 (`03`): el handle está en la lista de revocación.
@@ -69,6 +70,7 @@ flowchart LR
 - **Disparador:** `POST /api/events` con `t = verif`.
 - **Flujo principal:** la API busca al dueño del handle; si tiene teléfono y avisos activos, arma el mensaje según `res` y lo envía por Kapso en segundo plano.
 - **Mensajes:** 01 autorizado · 02 firma inválida · 03 cédula bloqueada · 04 vencida · 05 sin permiso · 06 rechazaste compartir. Todos con botón **Bloquear cédula**, salvo 03.
+- **Consentimiento:** si el `01` o `06` viene de una solicitud de consentimiento reciente (2 minutos, mismo handle y terminal), no se repite el aviso; solo se avisa el `06` por tiempo agotado ("la solicitud venció").
 - **Alternos:** sin teléfono/avisos apagados/handle desconocido → no se envía; botones fallan → texto con "Responde BLOQUEAR"; Kapso falla → se registra el error y el evento ya está guardado.
 
 ### CU-03 · Leer datos en emergencia

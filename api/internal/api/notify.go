@@ -95,7 +95,7 @@ func useMessage(name, local string, attr, res int, emergency bool, when string) 
 }
 
 // notifyUse avisa al dueño de la cédula del resultado de una lectura: acceso autorizado o denegado.
-func (s *Server) notifyUse(handle []byte, local string, attr, res int, emergency bool, at time.Time) {
+func (s *Server) notifyUse(handle []byte, terminalID int64, local string, attr, res int, emergency bool, at time.Time) {
 	s.goNotify(func(ctx context.Context) {
 		var name, phone string
 		err := s.DB.QueryRow(ctx,
@@ -109,6 +109,24 @@ func (s *Server) notifyUse(handle []byte, local string, attr, res int, emergency
 			return
 		}
 		body, blockable := useMessage(name, local, attr, res, emergency, fmtWhen(at, s.now()))
+		if !emergency && (res == 1 || res == 6) {
+			// Si hubo una solicitud de consentimiento reciente, el titular ya recibió la pregunta y su
+			// confirmación: no se repite el aviso. Un 06 por tiempo agotado sí se avisa.
+			var cstatus string
+			err := s.DB.QueryRow(ctx,
+				`SELECT status FROM consent_requests
+				  WHERE handle = $1 AND terminal_id = $2 AND created_at > $3
+				  ORDER BY created_at DESC LIMIT 1`, handle, terminalID, s.now().Add(-2*time.Minute)).Scan(&cstatus)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				log.Printf("buscar solicitud de consentimiento: %v", err)
+			}
+			if err == nil {
+				if cstatus != "pendiente" {
+					return
+				}
+				body, blockable = fmt.Sprintf("La solicitud de %s venció y no se compartió nada.", local), false
+			}
+		}
 		if body == "" {
 			return
 		}
@@ -201,6 +219,12 @@ func (s *Server) kapsoWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, m := range msgs {
+		if id, approved, ok := m.Consent(); ok {
+			if err := s.answerConsent(r.Context(), m.From, id, approved); err != nil {
+				log.Printf("consentimiento por WhatsApp: %v", err)
+			}
+			continue
+		}
 		if !m.IsBlock() {
 			continue
 		}

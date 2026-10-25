@@ -98,6 +98,8 @@ func (s *Server) Routes(r chi.Router) {
 		r.Post("/api/events", s.events)
 		r.Post("/api/emision/start", s.emisionStart)
 		r.Post("/api/link/start", s.linkStart)
+		r.Post("/api/consent", s.consentStart)
+		r.Get("/api/consent/{id}", s.consentStatus)
 	})
 }
 

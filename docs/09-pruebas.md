@@ -39,6 +39,25 @@ Aplicar las migraciones en orden y definir `DATABASE_URL=postgres://postgres:slj
 
 Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_test.go`.
 
+## Matriz del consentimiento por WhatsApp
+
+| # | Caso | Entrada | Esperado |
+|---|---|---|---|
+| 13 | Solicitud | `POST /api/consent` `{h, a:"A1"}` | 200 `pendiente`; WhatsApp con botones al teléfono de Ana |
+| 14 | Aprobar | Webhook firmado `consent:<id>:si` | `GET` da `aprobado`; Ana recibe "Listo: compartiste…" |
+| 15 | Rechazar | Webhook con botón `no` o texto "NO" | `GET` da `rechazado`; "No se compartió nada." |
+| 16 | Segunda respuesta | `si` y luego `no` | La primera gana; el estado no cambia |
+| 17 | Teléfono ajeno | Respuesta desde otro número | Se ignora; sigue `pendiente` |
+| 18 | Vencida | `expires_at` pasado | `GET` da `vencido`; respuesta tardía ignorada |
+| 19 | Sin WhatsApp | Ciudadano sin teléfono o avisos apagados | 422 `sin_whatsapp`; no se envía nada |
+| 20 | Cédula desconocida / revocada | `POST /api/consent` | 404 / 409 |
+| 21 | Otro terminal | `GET /api/consent/{id}` con token ajeno | 404 |
+| 22 | Aviso duplicado | `verif` `01` o `06` tras una solicitud respondida | Sin segundo WhatsApp |
+| 23 | Tiempo agotado | `verif` `06` con la solicitud vencida | "La solicitud de {local} venció y no se compartió nada." |
+| 24 | Reconocer la respuesta | `Incoming.Consent()` con botón y texto Sí/No, y con BLOQUEAR | Distingue consentimiento de bloqueo |
+
+Los casos 13–24 están automatizados en `notify_test.go`, `kapso_test.go` y `kapso_integration_test.go`.
+
 ## E2E simulado con mock de Kapso
 
 1. Levantar un servidor HTTP local que registre cada `POST /meta/whatsapp/v24.0/<id>/messages`.
@@ -52,7 +71,10 @@ Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_t
 - [x] `scan` lee UID y mapa de sectores de las dos cédulas.
 - [x] Consentimiento simulado en placa (`a`/`r`): `01` → "Esperando autorización" en el UNO → verde o rojo.
 - [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
+- [ ] Antes de empezar: Ana escribe "hola" al número de Kapso (ventana de 24 h para los botones) y el webhook apunta a `/api/webhooks/kapso`.
 - [ ] Ana en el bar → "Esperando autorización" → WhatsApp → **Sí** → aprobado en el UNO.
+- [ ] Tras aprobar, Ana recibe la pregunta y la confirmación, sin el aviso "se autorizó el acceso" duplicado.
+- [ ] Sin WhatsApp o sin internet: el gateway avisa al operador y `si`/`no` por consola resuelven el pedido.
 - [ ] Ana en el bar → WhatsApp → **No** → `06`; sin respuesta en 60 s → `06`.
 - [ ] María en el bar → `05` (su cédula no tiene el dato "Mayor de 18").
 - [ ] Cédula revocada → `03` y WhatsApp sin botón.
@@ -70,7 +92,7 @@ Corrida sobre la rama `integracion` (main + p1-backend + p2-esp32 + pic_guardian
 | Nivel | Resultado |
 |---|---|
 | `go vet` y `go test ./...` | OK |
-| `SLJ_INTEGRATION=1 go test ./...` con Postgres 16 en Docker y las 6 migraciones | OK (incluye avisos 01–05, emergencia, respaldo en texto, tamper y webhook) |
+| `SLJ_INTEGRATION=1 go test ./...` con Postgres 16 en Docker y las 7 migraciones | OK (incluye avisos 01–05, emergencia, respaldo en texto, tamper, webhook y consentimiento por WhatsApp) |
 | `node tools/verify.mjs` | Todo correcto |
 | Front: `npm run lint` y `npm run build` | OK |
 | Firmware: `pio run` | No ejecutado: `pio` no está instalado en esta máquina |

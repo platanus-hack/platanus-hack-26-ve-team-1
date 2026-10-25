@@ -90,6 +90,7 @@ func TestIntegrationKapso(t *testing.T) {
 	var citizenIDs, terminalIDs []int64
 	t.Cleanup(func() {
 		srv.Wait()
+		db.Exec(ctx, `DELETE FROM consent_requests WHERE terminal_id = ANY($1)`, terminalIDs)
 		db.Exec(ctx, `DELETE FROM events WHERE terminal_id = ANY($1)`, terminalIDs)
 		db.Exec(ctx, `DELETE FROM cards WHERE citizen_id = ANY($1)`, citizenIDs)
 		db.Exec(ctx, `DELETE FROM terminals WHERE id = ANY($1)`, terminalIDs)
@@ -281,5 +282,125 @@ func TestIntegrationKapso(t *testing.T) {
 	hook(btn, "k3")
 	if got := fake.take(); len(got) != 0 {
 		t.Fatalf("número desconocido: %+v", got)
+	}
+
+	// --- Consentimiento por WhatsApp ---
+	get := func(path, token string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest("GET", ts.URL+path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var buf bytes.Buffer
+		buf.ReadFrom(resp.Body)
+		return resp.StatusCode, buf.String()
+	}
+	// Ana se bloqueó arriba: se crea otra cédula activa para el consentimiento.
+	consentCard := mkCard(anaID)
+	consent := func(card string) (int, int64) {
+		t.Helper()
+		code, out := post("/api/consent", shop, fmt.Sprintf(`{"h":"%s","a":"A1"}`, card), nil)
+		srv.Wait()
+		var id int64
+		if i := strings.Index(out, `"id":`); i >= 0 {
+			fmt.Sscanf(out[i+5:], "%d", &id)
+		}
+		return code, id
+	}
+	estado := func(id int64) string {
+		t.Helper()
+		_, out := get(fmt.Sprintf("/api/consent/%d", id), shop)
+		for _, e := range []string{"pendiente", "aprobado", "rechazado", "vencido"} {
+			if strings.Contains(out, `"estado":"`+e+`"`) {
+				return e
+			}
+		}
+		return out
+	}
+	answer := func(from, buttonID, key string) {
+		t.Helper()
+		b := fmt.Sprintf(`{"message":{"from":"%s","interactive":{"button_reply":{"id":"%s","title":"x"}}}}`, from, buttonID)
+		hook(b, key)
+	}
+
+	code, id := consent(consentCard)
+	got = fake.take()
+	if code != 200 || id == 0 || len(got) != 1 || got[0].To != anaPhone || !got[0].Buttons ||
+		!strings.Contains(got[0].Body, "Bar La Esquina pide 'Mayor de 18'") || estado(id) != "pendiente" {
+		t.Fatalf("solicitud: %d id=%d %+v", code, id, got)
+	}
+	// Otro terminal no puede consultarla.
+	if code, _ := get(fmt.Sprintf("/api/consent/%d", id), emerg); code != 404 {
+		t.Fatalf("otro terminal: %d", code)
+	}
+	// Un teléfono ajeno no responde por Ana.
+	answer("5800001"+suffix, fmt.Sprintf("consent:%d:si", id), "c0")
+	if estado(id) != "pendiente" {
+		t.Fatalf("respondió un teléfono ajeno: %s", estado(id))
+	}
+	fake.take()
+	// La primera respuesta gana; la segunda no cambia nada.
+	answer(anaPhone, fmt.Sprintf("consent:%d:si", id), "c1")
+	got = fake.take()
+	if estado(id) != "aprobado" || len(got) != 1 || !strings.Contains(got[0].Body, "Listo: compartiste 'Mayor de 18' con Bar La Esquina") {
+		t.Fatalf("aprobación: %s %+v", estado(id), got)
+	}
+	answer(anaPhone, fmt.Sprintf("consent:%d:no", id), "c2")
+	fake.take()
+	if estado(id) != "aprobado" {
+		t.Fatalf("la segunda respuesta cambió el estado: %s", estado(id))
+	}
+	// Tras un 01 aprobado por WhatsApp no se duplica el aviso.
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"01","ts":%d}`, consentCard, now))
+	if got := fake.take(); len(got) != 0 {
+		t.Fatalf("aviso duplicado tras consentir: %+v", got)
+	}
+
+	// Rechazo por texto "NO": 06 sin aviso duplicado.
+	_, id2 := consent(consentCard)
+	fake.take()
+	hook(fmt.Sprintf(`{"message":{"from":"%s","text":{"body":"NO"}}}`, anaPhone), "c3")
+	got = fake.take()
+	if estado(id2) != "rechazado" || len(got) != 1 || !strings.Contains(got[0].Body, "No se compartió nada") {
+		t.Fatalf("rechazo: %s %+v", estado(id2), got)
+	}
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"06","ts":%d}`, consentCard, now))
+	if got := fake.take(); len(got) != 0 {
+		t.Fatalf("aviso duplicado tras rechazar: %+v", got)
+	}
+
+	// Vencida: GET da vencido, una respuesta tardía se ignora y el 06 avisa el vencimiento.
+	_, id3 := consent(consentCard)
+	fake.take()
+	db.Exec(ctx, `UPDATE consent_requests SET expires_at = now() - interval '1 second' WHERE id = $1`, id3)
+	if estado(id3) != "vencido" {
+		t.Fatalf("vencida: %s", estado(id3))
+	}
+	answer(anaPhone, fmt.Sprintf("consent:%d:si", id3), "c4")
+	fake.take()
+	if estado(id3) != "vencido" {
+		t.Fatalf("respuesta tardía aceptada: %s", estado(id3))
+	}
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"06","ts":%d}`, consentCard, now))
+	got = fake.take()
+	if len(got) != 1 || !strings.Contains(got[0].Body, "venció y no se compartió nada") {
+		t.Fatalf("aviso de vencimiento: %+v", got)
+	}
+
+	// Sin WhatsApp, cédula desconocida y revocada.
+	if code, _ := consent(mutedCard); code != 422 {
+		t.Fatalf("sin whatsapp: %d", code)
+	}
+	if code, _ := consent("00000000000000aa"); code != 404 {
+		t.Fatalf("desconocida: %d", code)
+	}
+	if code, _ := consent(anaCard); code != 409 { // revocada por BLOQUEAR arriba
+		t.Fatalf("revocada: %d", code)
+	}
+	if got := fake.take(); len(got) != 0 {
+		t.Fatalf("no debía enviarse nada: %+v", got)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -119,6 +120,32 @@ func (m Incoming) IsBlock() bool {
 	}
 	t := strings.ToLower(strings.Trim(strings.TrimSpace(m.Text), " .!¡¿?\"'"))
 	return t == "bloquear"
+}
+
+// Consent reconoce la respuesta a una solicitud de consentimiento: el botón "consent:<id>:si|no" o,
+// como respaldo, el texto SI/NO. Con texto id vale 0: se aplica a la última solicitud pendiente.
+func (m Incoming) Consent() (id int64, approved bool, ok bool) {
+	if strings.HasPrefix(strings.ToLower(m.ButtonID), "consent:") {
+		parts := strings.Split(strings.ToLower(m.ButtonID), ":")
+		if len(parts) != 3 || (parts[2] != "si" && parts[2] != "no") {
+			return 0, false, false
+		}
+		n, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil || n <= 0 {
+			return 0, false, false
+		}
+		return n, parts[2] == "si", true
+	}
+	if m.ButtonID != "" {
+		return 0, false, false
+	}
+	switch strings.ToLower(strings.Trim(strings.TrimSpace(m.Text), " .!¡¿?\"'")) {
+	case "si", "sí":
+		return 0, true, true
+	case "no":
+		return 0, false, true
+	}
+	return 0, false, false
 }
 
 // ParseWebhook extrae los mensajes de un evento whatsapp.message.received, suelto o en lote.
