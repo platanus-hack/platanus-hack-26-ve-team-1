@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant PIC as PIC guardián
+  participant FW as Terminal
+  participant API
+  participant K as Kapso
+  PIC->>PIC: Tapa abierta o 10 s sin latido
+  PIC->>FW: BLOQ en ALTO + corta alimentación del lector
+  FW->>API: {"t":"tamper"} (vía gateway)
+  API->>K: «Alerta: el terminal X detectó manipulación»
+  Note over FW: Voz «terminal bloqueado», REARME con precinto cerrado

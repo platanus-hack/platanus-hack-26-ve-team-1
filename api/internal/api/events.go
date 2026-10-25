@@ -164,9 +164,8 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.publishEvent(r.Context(), eventID, handle, term.Local, attr, res, in.Emg, at)
-		if res == 1 { // solo un acceso aprobado se avisa al ciudadano
-			s.notifyUse(handle, term.Local, attr, in.Emg, at)
-		}
+		// Se avisa al ciudadano tanto si se autorizó el acceso como si se denegó.
+		s.notifyUse(handle, term.Local, attr, res, in.Emg, at)
 	default:
 		writeErr(w, http.StatusBadRequest, "t debe ser verif o tamper")
 		return

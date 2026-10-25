@@ -1,0 +1,12 @@
+sequenceDiagram
+  actor C as Ciudadano
+  participant FW as Terminal (modo vincular)
+  participant API
+  participant PWA as /billetera
+  C->>FW: Toca la cédula
+  FW->>API: POST /api/link/start {h} (vía gateway)
+  API-->>FW: {c:"123456"} (2 min)
+  FW-->>C: Muestra el código
+  C->>PWA: Escribe el código (+ clave pública P-256 del celular)
+  PWA->>API: POST /api/link/confirm {code, public_key}
+  API-->>PWA: credenciales derivadas (A1, A2, A6, carnet)

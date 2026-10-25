@@ -1,0 +1,25 @@
+flowchart LR
+  subgraph Campo[Terminal físico]
+    Card[Tarjeta MIFARE 1K]
+    FW[ESP32 + RC522<br/>firmware PlatformIO]
+    Nex[Nextion<br/>ciudadano]
+    UNO[UNO + ILI9488<br/>comercio]
+    PIC[PIC16F13145<br/>guardián]
+    Card <-->|NFC 13,56 MHz| FW
+    FW -->|UART| Nex
+    FW -->|serial 9600, solo códigos| UNO
+    FW <-->|HB / BLOQ| PIC
+  end
+  GW[Gateway Node.js<br/>cola SQLite + audio]
+  FW <-->|USB serial JSON| GW
+  subgraph Render
+    Web[Static Site slj-web<br/>React + Vite + PWA]
+    API[Web Service slj-api<br/>Go + chi]
+    DB[(Postgres)]
+    Web -->|rewrite /api/*| API
+    API --> DB
+  end
+  GW -->|HTTPS Bearer| API
+  API <-->|REST + webhook HMAC| K[(Kapso)]
+  Phone[Celular<br/>PWA billetera] --> Web
+  Verif[Celular comercio<br/>PWA verificador] --> Web

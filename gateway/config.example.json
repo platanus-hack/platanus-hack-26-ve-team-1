@@ -1,0 +1,11 @@
+{
+  "api": "https://hackathonplatanusvenezuela2026.onrender.com",
+  "puerto": "COM10",
+  "baudios": 115200,
+  "terminal": "Bar La Esquina",
+  "tokens_demo": "../secrets/demo.json",
+  "tokens": {},
+  "datos": "data",
+  "audio": "audio",
+  "logs": "logs"
+}

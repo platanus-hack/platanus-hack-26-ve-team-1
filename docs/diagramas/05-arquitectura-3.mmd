@@ -1,0 +1,19 @@
+flowchart TB
+  subgraph slj-api
+    R[chi Router + CORS + sesión + roles]
+    TA[terminal.Auth<br/>Bearer → SHA-256]
+    AUTH[auth.go<br/>registro / login / JWT]
+    EV[events.go<br/>verif y tamper]
+    NO[notify.go<br/>useMessage + Notifier]
+    HUB[history.go<br/>SSE + LISTEN/NOTIFY]
+    EM[emision.go / cards.go<br/>firma y bloques]
+    LK[link.go<br/>códigos de 6 dígitos]
+    SG[internal/sign<br/>ECDSA P-256 crudo]
+    KP[internal/kapso<br/>cliente + webhook]
+  end
+  R --> AUTH & HUB & EM & LK
+  R --> TA --> EV
+  EV -->|publishEvent| HUB
+  EV --> NO --> KP
+  EM --> SG
+  KP -->|webhook BLOQUEAR| NO

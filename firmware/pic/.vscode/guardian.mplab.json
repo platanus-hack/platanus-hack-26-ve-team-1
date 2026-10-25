@@ -1,0 +1,52 @@
+{
+    "version": "1.9",
+    "configurations": [
+        {
+            "name": "default",
+            "id": "",
+            "device": "PIC16F13145",
+            "imagePath": "./out/guardian/default.elf",
+            "toolProperties": "default-tool-base",
+            "tool": "PKOB nano",
+            "packs": [
+                {
+                    "name": "PIC16F1xxxx_DFP",
+                    "vendor": "Microchip",
+                    "version": "1.32.471"
+                }
+            ],
+            "fileSet": "default",
+            "toolchain": "default-XC8"
+        }
+    ],
+    "propertyGroups": [
+        {
+            "name": "default-XC8",
+            "type": "toolchain",
+            "provider": "microchip.toolchains:xc8@2.46",
+            "properties": {}
+        },
+        {
+            "name": "default-tool-base",
+            "type": "tool",
+            "properties": {}
+        }
+    ],
+    "fileSets": [
+        {
+            "name": "default",
+            "files": [
+                {
+                    "include": "**/*",
+                    "exclude": "**/@(build|_build|out|cmake|.vscode)/**/*"
+                },
+                "config.mcc/mcc_generated_files/system/src/clock.c",
+                "config.mcc/mcc_generated_files/system/src/interrupt.c",
+                "config.mcc/mcc_generated_files/system/src/config_bits.c",
+                "config.mcc/mcc_generated_files/system/src/system.c",
+                "config.mcc/main.c",
+                "config.mcc/mcc_generated_files/system/src/pins.c"
+            ]
+        }
+    ]
+}

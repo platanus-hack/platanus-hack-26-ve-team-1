@@ -1,0 +1,14 @@
+flowchart TB
+  Ciudadano([Ciudadano])
+  Comercio([Comercio / Salud])
+  Emisor([Emisor])
+  SLJ[["sIsA<br/>(cédula, terminal, PWA, nube)"]]
+  Kapso[(Kapso<br/>WhatsApp)]
+  ElevenLabs[(ElevenLabs<br/>audios pregenerados)]
+
+  Ciudadano -->|cédula NFC, portal, billetera| SLJ
+  Comercio -->|terminal, verificador| SLJ
+  Emisor -->|panel /emisor| SLJ
+  SLJ -->|avisos| Kapso
+  Kapso -->|webhook BLOQUEAR| SLJ
+  ElevenLabs -. audios generados una vez .-> SLJ

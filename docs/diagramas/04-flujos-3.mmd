@@ -1,0 +1,20 @@
+sequenceDiagram
+  actor E as Emisor
+  participant Web as Panel /emisor
+  participant API
+  participant GW as Gateway
+  participant FW as Terminal (modo emitir)
+  E->>Web: Elige ciudadano → «Emitir cédula»
+  Web->>API: POST /api/emision/order
+  API-->>Web: {id} (pendiente)
+  GW->>API: GET /api/terminal/config (modo emitir)
+  FW->>GW: {"t":"uid","uid":"04A1B2C3"} (tarjeta virgen)
+  GW->>API: POST /api/emision/start {uid}
+  API->>API: Firma cada atributo: UID ‖ cabecera ‖ valor
+  API-->>GW: {h, blocks:[{s,b,d}…]}
+  loop por bloque
+    GW->>FW: {"t":"write","s":1,"b":0,"d":"…"}
+    FW-->>GW: {"t":"ack","ok":true}
+  end
+  FW->>GW: {"t":"written","ok":true}
+  Web->>API: GET /api/emision/status → completado

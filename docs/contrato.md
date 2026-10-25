@@ -1,4 +1,4 @@
-# Contrato de bytes de SoloLoJusto
+# Contrato de bytes de sIsA
 
 Fuente de verdad para la API (Go), el firmware del lector (ESP32 con micro-ecc) y las PWAs (WebCrypto). Los enlaces entre lector, gateway, PIC y API están en [`contrato-terminal.md`](contrato-terminal.md).
 Cualquier cambio se anuncia al equipo antes de hacerlo. Implementación de referencia:
@@ -196,11 +196,16 @@ Variables: `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID`, `KAPSO_WEBHOOK_SECRET`. Tel
 
 | Disparador | Mensaje | A quién |
 |---|---|---|
-| `verif` con `res = 01` | "Tu cédula compartió 'Mayor de 18' con Bar La Esquina hoy a las 21:40. ¿No fuiste tú?" + botón **Bloquear cédula** | Dueño de la cédula, si tiene teléfono y avisos activos |
-| `verif` con `res = 01` y `emg = true` | "Un terminal de emergencia (X) leyó tu tipo de sangre y contacto hoy a las 21:40. ¿No fuiste tú?" + botón | Igual |
+| `verif` con `res = 01` | "Hola Ana: se autorizó el acceso. Tu cédula compartió 'Mayor de 18' con Bar La Esquina hoy a las 21:40. ¿No fuiste tú?" + botón **Bloquear cédula** | Dueño de la cédula, si tiene teléfono y avisos activos |
+| `verif` con `res = 01` y `emg = true` | "Hola Ana: un terminal de emergencia (X) leyó tu tipo de sangre y contacto hoy a las 21:40. ¿No fuiste tú?" + botón | Igual |
+| `verif` con `res = 02` | "…se negó el acceso en X … porque la firma de la tarjeta no es válida (posible copia o tarjeta alterada)." + botón | Igual |
+| `verif` con `res = 03` | "…se negó el acceso en X … porque tu cédula está bloqueada. Puedes reactivarla desde el portal." (sin botón) | Igual |
+| `verif` con `res = 04` | "…se negó el acceso en X … porque tu cédula está vencida." + botón | Igual |
+| `verif` con `res = 05` | "…X pidió 'Sangre y alergias' …, un dato que su terminal no tiene permiso para leer. No se compartió nada." + botón | Igual |
+| `verif` con `res = 06` | "…se canceló el acceso en X … porque no aceptaste compartir '…'. No se compartió nada." + botón | Igual |
 | `tamper` | "Alerta: el terminal 'X' detectó manipulación hoy a las 21:40. Revisa el equipo." | Dueño del terminal (`terminals.owner_id`) |
 
-Si el envío con botones falla, se manda el mismo texto con "Responde BLOQUEAR." Las lecturas con otro resultado (firma inválida, revocada, vencida, sin permiso, rechazada) no generan aviso. Las horas van en hora de Venezuela (UTC-4).
+Si el envío con botones falla, se manda el mismo texto con "Responde BLOQUEAR." Toda lectura (aprobada o denegada) avisa al dueño de la cédula; si el handle no existe, o la cuenta no tiene teléfono o tiene los avisos apagados, no se envía nada. `KAPSO_BASE_URL` (opcional) cambia la URL base de Kapso, útil para apuntar a un mock en pruebas. Las horas van en hora de Venezuela (UTC-4).
 
 **Webhook** `POST /api/webhooks/kapso` (evento `whatsapp.message.received`): se valida `X-Webhook-Signature` (HMAC-SHA256 hex del cuerpo crudo con `KAPSO_WEBHOOK_SECRET`); sin secreto configurado responde 503, con firma mala 401. Si quien escribe envía BLOQUEAR o toca el botón (`id = bloquear`), se revocan todas las cédulas activas de la cuenta con ese teléfono, se borran sus credenciales de billetera y se responde "Tu cédula fue bloqueada. Puedes reactivarla desde el portal." Cualquier otro mensaje se ignora. `X-Idempotency-Key` evita responder dos veces ante un reintento.
 

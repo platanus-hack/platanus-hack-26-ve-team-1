@@ -23,6 +23,8 @@ gateway/*.sqlite
 gateway/*.sqlite-journal
 gateway/*.db
 gateway/logs/
+gateway/data/
+gateway/*.exe
 
 # De platformio, la plataforma donde programo los microcontroladores no PIC
 .pio/
@@ -41,6 +43,10 @@ firmware/pic/.generated_files/
 firmware/pic/**/nbproject/private/
 firmware/pic/**/dist/
 firmware/pic/**/debug/
+
+# La extensión MPLAB los crea en la raíz si se abre el repo completo
+/_build/
+/cmake/
 
 # Archivos de sistema
 Thumbs.db
@@ -61,3 +67,7 @@ secrets/
 *.db
 api/app
 api/retention
+# Build del front (Render lo genera)
+web/dist/
+.vscode/
+firmware/**/.vscode/

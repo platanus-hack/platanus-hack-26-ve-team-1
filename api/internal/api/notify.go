@@ -66,13 +66,41 @@ func (s *Server) sendBlockable(ctx context.Context, to, body string) {
 	}
 }
 
-// notifyUse avisa al dueño de la cédula que se compartió un dato (o que lo leyó emergencia).
-func (s *Server) notifyUse(handle []byte, local string, attr int, emergency bool, at time.Time) {
+// useMessage arma el aviso de una lectura según su resultado (1..6). blockable indica si lleva el
+// botón "Bloquear cédula"; con la cédula ya revocada (3) no tiene sentido ofrecerlo.
+func useMessage(name, local string, attr, res int, emergency bool, when string) (body string, blockable bool) {
+	hi := "Hola"
+	if name != "" {
+		hi = "Hola " + name
+	}
+	dato := attrNames[attr]
+	switch res {
+	case 1:
+		if emergency {
+			return fmt.Sprintf("%s: un terminal de emergencia (%s) leyó tu tipo de sangre y contacto %s. ¿No fuiste tú?", hi, local, when), true
+		}
+		return fmt.Sprintf("%s: se autorizó el acceso. Tu cédula compartió '%s' con %s %s. ¿No fuiste tú?", hi, dato, local, when), true
+	case 2:
+		return fmt.Sprintf("%s: se negó el acceso en %s %s porque la firma de la tarjeta no es válida (posible copia o tarjeta alterada). ¿No fuiste tú?", hi, local, when), true
+	case 3:
+		return fmt.Sprintf("%s: se negó el acceso en %s %s porque tu cédula está bloqueada. Puedes reactivarla desde el portal.", hi, local, when), false
+	case 4:
+		return fmt.Sprintf("%s: se negó el acceso en %s %s porque tu cédula está vencida. ¿No fuiste tú?", hi, local, when), true
+	case 5:
+		return fmt.Sprintf("%s: %s pidió '%s' %s, un dato que su terminal no tiene permiso para leer. No se compartió nada. ¿No fuiste tú?", hi, local, dato, when), true
+	case 6:
+		return fmt.Sprintf("%s: se canceló el acceso en %s %s porque no aceptaste compartir '%s'. No se compartió nada. ¿No fuiste tú?", hi, local, when, dato), true
+	}
+	return "", false
+}
+
+// notifyUse avisa al dueño de la cédula del resultado de una lectura: acceso autorizado o denegado.
+func (s *Server) notifyUse(handle []byte, local string, attr, res int, emergency bool, at time.Time) {
 	s.goNotify(func(ctx context.Context) {
-		var phone string
+		var name, phone string
 		err := s.DB.QueryRow(ctx,
-			`SELECT c.whatsapp_phone FROM cards k JOIN citizens c ON c.id = k.citizen_id
-			  WHERE k.handle = $1 AND c.notifications AND c.whatsapp_phone IS NOT NULL`, handle).Scan(&phone)
+			`SELECT c.name, c.whatsapp_phone FROM cards k JOIN citizens c ON c.id = k.citizen_id
+			  WHERE k.handle = $1 AND c.notifications AND c.whatsapp_phone IS NOT NULL`, handle).Scan(&name, &phone)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return
 		}
@@ -80,14 +108,17 @@ func (s *Server) notifyUse(handle []byte, local string, attr int, emergency bool
 			log.Printf("buscar teléfono para el aviso: %v", err)
 			return
 		}
-		when := fmtWhen(at, s.now())
-		var body string
-		if emergency {
-			body = fmt.Sprintf("Un terminal de emergencia (%s) leyó tu tipo de sangre y contacto %s. ¿No fuiste tú?", local, when)
-		} else {
-			body = fmt.Sprintf("Tu cédula compartió '%s' con %s %s. ¿No fuiste tú?", attrNames[attr], local, when)
+		body, blockable := useMessage(name, local, attr, res, emergency, fmtWhen(at, s.now()))
+		if body == "" {
+			return
 		}
-		s.sendBlockable(ctx, phone, body)
+		if blockable {
+			s.sendBlockable(ctx, phone, body)
+			return
+		}
+		if err := s.Notifier.SendText(ctx, phone, body); err != nil {
+			log.Printf("aviso de WhatsApp falló: %v", err)
+		}
 	})
 }
 

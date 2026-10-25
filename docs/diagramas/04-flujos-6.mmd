@@ -1,0 +1,5 @@
+stateDiagram-v2
+  [*] --> activa: emisión
+  activa --> revocada: BLOQUEAR (WhatsApp) / portal / emisor
+  revocada --> activa: reactivar en el portal
+  revocada --> revocada: intento de uso → res 03 + aviso sin botón
