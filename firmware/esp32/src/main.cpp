@@ -638,7 +638,8 @@ static void atenderMenu(HmiTouchEvent touch) {
 
 // ─── Diagnóstico del lector ──────────────────────────────────────────────────
 // 'scan' en la consola prueba el RC522 y la tarjeta sin hora ni consentimiento:
-// UID, tipo, qué clave abre cada sector y el índice. No lee los atributos.
+// UID, tipo, qué clave abre cada sector y los bloques con datos. Si es una cédula,
+// decodifica sus atributos, sin verificar la firma.
 
 void onGatewayScan() {
     if (state == STATE_EMISSION) {
@@ -657,6 +658,58 @@ void onGatewayScan() {
     nfcFinishCard();
     scanActivo = true;
     scanTimer = millis();
+}
+
+static String bytesHex(const uint8_t* p, uint8_t n) {
+    String hex = "";
+    for (uint8_t i = 0; i < n; i++) {
+        char b[3];
+        snprintf(b, sizeof(b), "%02X", p[i]);
+        hex += b;
+    }
+    return hex;
+}
+
+// Bloque en blanco: todo en 00, como viene de fábrica (algunas tarjetas traen FF)
+static bool bloqueVacio(const uint8_t* p) {
+    for (uint8_t i = 1; i < 16; i++) {
+        if (p[i] != p[0]) return false;
+    }
+    return p[0] == 0x00 || p[0] == 0xFF;
+}
+
+// Registro de un atributo: cabecera(16) || valor relleno (16, o 64 en identidad) || firma(64)
+static void imprimirAtributo(const NfcDiagnostico& d, uint8_t atributo) {
+    uint8_t inicio = getSectorForAttribute(atributo);
+    uint8_t maxValor = largoMaximoValor(atributo);
+    uint8_t sectores = (16 + maxValor + 64) / 48;
+    uint8_t registro[144];
+    for (uint8_t i = 0; i < sectores; i++) {
+        if (inicio + i >= d.sectores || !d.leido[inicio + i]) return;
+        memcpy(registro + i * 48, d.datos[inicio + i], 48);
+    }
+    if (registro[0] != 0x01 || registro[2] != atributo) return;
+
+    // El valor es texto UTF-8; si trae bytes de control se muestra en hexadecimal
+    uint8_t largo = registro[3] < maxValor ? registro[3] : maxValor;
+    String valor = "";
+    bool texto = true;
+    for (uint8_t i = 0; i < largo; i++) {
+        uint8_t c = registro[16 + i];
+        if (c < 0x20 || c == 0x7F) texto = false;
+        valor += (char)c;
+    }
+    if (!texto) valor = "0x" + bytesHex(registro + 16, largo);
+
+    time_t vence = ((uint32_t)registro[4] << 24) | ((uint32_t)registro[5] << 16) | ((uint32_t)registro[6] << 8) | registro[7];
+    struct tm f;
+    gmtime_r(&vence, &f);
+    char fecha[12];
+    strftime(fecha, sizeof(fecha), "%Y-%m-%d", &f);
+
+    const char* emisor = registro[1] == 0x01 ? "Nacional" : registro[1] == 0x02 ? "Universidad" : "desconocido";
+    linkSendLog("[SCAN] A" + String(atributo) + " " + nombreAtributo(atributo) + ": \"" + valor + "\", emisor " +
+                emisor + ", vence " + fecha + " (firma sin verificar)");
 }
 
 static void imprimirDiagnostico(const NfcDiagnostico& d) {
@@ -678,7 +731,7 @@ static void imprimirDiagnostico(const NfcDiagnostico& d) {
     // Una letra por sector: F = clave de fábrica, R = clave del rol, x = no abre, ? = sin probar
     String mapa = "";
     bool fabrica = true, retirada = false, desconocida = false;
-    for (uint8_t s = 1; s <= 14; s++) {
+    for (uint8_t s = 0; s < d.sectores; s++) {
         char c = '?';
         switch (d.sector[s]) {
             case SECTOR_FABRICA: c = 'F'; break;
@@ -690,17 +743,29 @@ static void imprimirDiagnostico(const NfcDiagnostico& d) {
     }
     linkSendLog("[SCAN] Sectores (F fabrica, R clave del rol, x no abre): " + mapa);
 
-    bool esCedula = d.indiceLeido && d.bloque4[0] == 0x01;
-    if (d.indiceLeido) {
-        String hex = "";
-        for (uint8_t i = 0; i < 16; i++) {
-            char b[3];
-            snprintf(b, sizeof(b), "%02X", d.bloque4[i]);
-            hex += b;
+    // Bloques de datos que no están en blanco. El bloque 0 es del fabricante (UID y datos fijos)
+    uint8_t conDatos = 0;
+    for (uint8_t s = 0; s < d.sectores; s++) {
+        if (!d.leido[s]) continue;
+        for (uint8_t b = (s == 0) ? 1 : 0; b < 3; b++) {
+            const uint8_t* bloque = d.datos[s] + b * 16;
+            if (bloqueVacio(bloque)) continue;
+            String ascii = "";
+            for (uint8_t i = 0; i < 16; i++) {
+                ascii += (bloque[i] >= 0x20 && bloque[i] < 0x7F) ? (char)bloque[i] : '.';
+            }
+            linkSendLog("[SCAN] Bloque " + String(s * 4 + b) + " (sector " + String(s) + "): " +
+                        bytesHex(bloque, 16) + "  " + ascii);
+            conDatos++;
         }
-        String linea = "[SCAN] Indice (bloque 4): " + hex;
-        if (esCedula) linea += " -> handle " + handleToHex(d.bloque4 + 1);
-        linkSendLog(linea);
+    }
+
+    bool esCedula = d.leido[1] && d.datos[1][0] == 0x01;
+    if (esCedula) {
+        linkSendLog("[SCAN] Indice (bloque 4) -> handle " + handleToHex(d.datos[1] + 1));
+        for (uint8_t a = ATTR_A1_MAYOR_18; a <= ATTR_A6_DONANTE; a++) {
+            imprimirAtributo(d, a);
+        }
     }
 
     if (retirada) {
@@ -708,12 +773,14 @@ static void imprimirDiagnostico(const NfcDiagnostico& d) {
     } else if (esCedula) {
         linkSendLog(fabrica ? "[SCAN] Cedula emitida pero sin sellar (trailers de fabrica)"
                             : "[SCAN] Cedula emitida. En modo verificar: hora, 'a' y acercarla antes de 10 s");
-    } else if (fabrica) {
-        linkSendLog("[SCAN] Tarjeta virgen: en modo verificar da 'no tiene indice'. Se graba en modo emitir");
-    } else if (desconocida) {
-        linkSendLog("[SCAN] Hay sectores con una clave desconocida: tarjeta de otro sistema o con un trailer mal grabado");
+    } else if (conDatos == 0 && !desconocida) {
+        linkSendLog(fabrica ? "[SCAN] Tarjeta vacia (virgen): todos los bloques de datos en blanco. Se graba en modo emitir"
+                            : "[SCAN] Tarjeta vacia, pero con sectores sellados con las claves del sistema");
+    } else if (conDatos == 0) {
+        linkSendLog("[SCAN] Sin datos en los sectores que abren; los marcados con x tienen una clave desconocida");
     } else {
-        linkSendLog("[SCAN] Sectores sellados, pero el indice no es de una cedula");
+        linkSendLog("[SCAN] Tiene datos en " + String(conDatos) + " bloques, pero no es una cedula" +
+                    (desconocida ? " (y hay sectores con una clave desconocida)" : ""));
     }
 }
 
