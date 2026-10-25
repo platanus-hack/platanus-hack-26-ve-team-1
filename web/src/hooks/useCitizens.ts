@@ -54,5 +54,19 @@ export function useCitizens() {
     )
   }, [])
 
-  return { state, reload, refresh, markRevoked }
+  /** Refleja un perfil guardado sin volver a pedir la lista. */
+  const markProfileComplete = useCallback((citizenId: string) => {
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            citizens: current.citizens.map((citizen) =>
+              citizen.id === citizenId ? { ...citizen, perfilCompleto: true } : citizen,
+            ),
+          }
+        : current,
+    )
+  }, [])
+
+  return { state, reload, refresh, markRevoked, markProfileComplete }
 }

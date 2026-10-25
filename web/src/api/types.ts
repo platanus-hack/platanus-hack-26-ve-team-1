@@ -93,6 +93,16 @@ export type Citizen = {
   estadoCedula: CitizenCardStatus
   /** Fecha de emisión en ISO 8601; null si aún no tiene cédula. */
   emitidaEn: string | null
+  /** El backend indica si ya tiene fecha de nacimiento y cédula; sin perfil no se puede emitir. */
+  perfilCompleto: boolean
+}
+
+/** Datos para completar el perfil de un ciudadano. Nunca se muestran de vuelta en la tabla. */
+export type CitizenProfileInput = {
+  /** Formato YYYY-MM-DD. */
+  fechaNacimiento: string
+  /** Número de cédula: solo dígitos. */
+  cedula: string
 }
 
 export type EmissionState = 'pendiente' | 'completado' | 'error'

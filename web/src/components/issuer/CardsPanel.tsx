@@ -5,6 +5,7 @@ import { useCitizens } from '../../hooks/useCitizens'
 import { useToast } from '../../hooks/useToast'
 import { getErrorMessage } from '../../lib/errors'
 import { Button, EmptyState, Input, Modal, Spinner } from '../ui'
+import { CitizenProfileModal } from './CitizenProfileModal'
 import { CitizensTable } from './CitizensTable'
 import { EmitCardModal } from './EmitCardModal'
 
@@ -19,9 +20,10 @@ function normalizeText(value: string): string {
 
 export function CardsPanel() {
   const { toast } = useToast()
-  const { state, reload, refresh, markRevoked } = useCitizens()
+  const { state, reload, refresh, markRevoked, markProfileComplete } = useCitizens()
   const [query, setQuery] = useState('')
   const [emitTarget, setEmitTarget] = useState<Citizen | null>(null)
+  const [profileTarget, setProfileTarget] = useState<Citizen | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<Citizen | null>(null)
   const [revoking, setRevoking] = useState(false)
   const revokingRef = useRef(false)
@@ -132,7 +134,18 @@ export function CardsPanel() {
           citizens={filtered}
           onEmit={setEmitTarget}
           onRevoke={openRevoke}
-          disabled={emitTarget !== null || revokeTarget !== null || revoking}
+          onCompleteProfile={setProfileTarget}
+          disabled={
+            emitTarget !== null || revokeTarget !== null || profileTarget !== null || revoking
+          }
+        />
+      )}
+
+      {profileTarget && (
+        <CitizenProfileModal
+          citizen={profileTarget}
+          onClose={() => setProfileTarget(null)}
+          onSaved={markProfileComplete}
         />
       )}
 
