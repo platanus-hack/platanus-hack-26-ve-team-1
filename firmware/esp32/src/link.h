@@ -34,10 +34,6 @@ void linkSendWritten(bool ok);
 void linkSendLink(const String& handleHex);
 void linkSendLog(const String& mensaje);
 
-// Menú oculto de la Nextion: pide al gateway el terminal de ese rol (el rol real está
-// atado al token del gateway); la respuesta llega como cfg
-void linkSendRol(const char* rol);
-
 // Envío a la pantalla de comercio del Arduino UNO (Serial1 en GPIO 25)
 void linkSendUnoResult(const char* resCode, uint8_t atributo, bool emergencia = false);
 void linkSendUnoLock();

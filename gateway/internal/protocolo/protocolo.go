@@ -36,7 +36,6 @@ type Mensaje struct {
 	OK   bool     `json:"ok"`
 	M    string   `json:"m"`
 	Sync *bool    `json:"sync"`
-	Rol  string   `json:"rol"`
 }
 
 // Atributo acepta "A1" (contrato) y también 1, como lo enviaba el firmware antes de

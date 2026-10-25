@@ -14,9 +14,9 @@ Firmware oficial del terminal de verificación descentralizado para **ESP32 DevK
    * Hash SHA-256 por hardware (`mbedTLS`).
    * Verificación de firmas **ECDSA P-256** (curva `secp256r1`, IEEE P1363 `r||s`) con `micro-ecc` contra la clave pública oficial de la Autoridad Nacional (`keys.h`).
    * Soporte de vectores oficiales de P1 (Ana válida, alterada, vencida).
-3. **Interfaz Ciudadano (Nextion HMI por Serial2):**
-   * Pantallas `page 0` a `page 8` (Espera, Solicitud, Verificando, Resultado, Menú de roles, etc.).
-   * Detección de eventos táctiles (Aceptar/Rechazar) y menú oculto de configuración.
+3. **Consentimiento del ciudadano:**
+   * El terminal pide un dato y espera la respuesta: `{"t":"consent","approved":true}` del gateway, o `a`/`r` en la consola.
+   * Comando `scan` de diagnóstico: UID, tipo de tarjeta y clave de cada sector.
 4. **Pantalla Comercio (Arduino UNO por Serial1 en GPIO 25):**
    * Protocolo JSON a 9600 baudios:
      * `{"t":"res","res":"01","a":"A1","emg":false}` tras cada lectura.
@@ -42,9 +42,6 @@ Firmware oficial del terminal de verificación descentralizado para **ESP32 DevK
 | | GPIO 5 | SDA / SS |
 | | GPIO 4 | RST |
 | | 3.3V & GND | **Solo 3.3V** (¡a 5V se daña!) |
-| **Nextion HMI** | GPIO 16 (RX2) | RX de ESP32 $\leftarrow$ TX de Nextion |
-| | GPIO 17 (TX2) | TX de ESP32 $\rightarrow$ RX de Nextion |
-| | 5V & GND | Alimentación externa de 5V (GND compartido) |
 | **Arduino UNO** | GPIO 25 (TX1) | TX de ESP32 $\rightarrow$ RX (Pin 0) de Arduino UNO |
 | | GPIO 35 (RX1) | Dummy libre (input-only) |
 | | GND | GND común |

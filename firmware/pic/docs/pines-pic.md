@@ -58,7 +58,6 @@ Programación: Curiosity Nano por USB (COM virtual: `COM__`), voltaje del dispos
 | Función | Pin |
 |---|---|
 | RC522 SPI (MISO, MOSI, SCK, SS) y RST | TBD |
-| Nextion | TBD |
 | Pantalla del comercio (UNO) | TBD |
 | `HB` (latido hacia el PIC) | TBD |
 | `BLOQ_IN` (desde el PIC, `INPUT_PULLUP`) | TBD |
@@ -80,7 +79,7 @@ Para cargar firmware hay que desconectar el cable del pin 0. Mensajes: [`docs/co
 
 | Riel | Fuente | Alimenta |
 |---|---|---|
-| 5 V externo (≥3 A) | Fuente de pared | Nextion, TBD |
+| 5 V externo (≥3 A) | Fuente de pared | TBD |
 | 3,3 V | Pin 3V3 del ESP32 | RC522 (vía NPN controlado por `HAB_LECTOR`). No tolera 5 V |
 | USB laptop | — | ESP32 (datos), UNO, Curiosity Nano |
 | GND | Común a todo | — |

@@ -8,9 +8,8 @@ Los bytes de la cédula, la firma y el QR están en [`contrato.md`](contrato.md)
 
 ```
 [Backend / API] <── HTTPS ──> [Gateway (laptop)] <── USB serial ──> [Lector ESP32]
-                                                                       │  │  │
-                                     [Pantalla comercio (UNO)] <── TX ─┘  │  └── HB / BLOQ ──> [PIC guardián]
-                                                       [Nextion] <── UART ┘
+                                                                       │     │
+                                     [Pantalla comercio (UNO)] <── TX ─┘     └── HB / BLOQ ──> [PIC guardián]
 ```
 
 | Enlace | Lado A | Lado B |
@@ -55,7 +54,6 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 | `{"t":"ack","s":1,"b":0,"ok":true}` | Respuesta a cada `write`: el bloque se escribió y se releyó igual |
 | `{"t":"written","ok":true}` | Respuesta a `seal`: trailers grabados. `ok:false` si algún sector quedó incompleto o no se pudo sellar |
 | `{"t":"log","m":"…"}` | Diagnóstico para el operador. El gateway lo muestra y no lo reenvía a la API |
-| `{"t":"rol","rol":"salud"}` | Menú oculto de la Nextion (demo): pide el terminal con ese rol. El gateway lo activa y responde con su `cfg`; si ninguno tiene ese rol, reenvía la `cfg` actual |
 
 **Gateway → lector:**
 

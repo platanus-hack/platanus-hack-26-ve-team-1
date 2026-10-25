@@ -10,7 +10,6 @@
 #include "keys.h"
 #include "store.h"
 #include "guard.h"
-#include "hmi.h"
 #include "link.h"
 #include "verify.h"
 #include "nfc.h"
@@ -33,16 +32,11 @@ static bool currentHandleOk = false;  // false = no hay una cédula identificada
 // Emisión en curso: por sector, bit b = bloque b escrito y releído
 static uint8_t emissionBlocks[16];
 
-// Menú oculto de la Nextion: en la demo, un mismo lector hace de bar, clínica o ambulancia
-static bool menuAbierto = false;
-static bool esperandoRol = false;   // se pidió un terminal al gateway y se espera su cfg
-static uint32_t menuTimer = 0;
-
 // Diagnóstico del lector ('scan' en la consola): mientras dura, la FSM espera
 static bool scanActivo = false;
 static uint32_t scanTimer = 0;
 
-// Vuelve a reposo: en STATE_IDLE cada modo dibuja su pantalla y pasa a esperar
+// Vuelve a reposo: en STATE_IDLE cada modo anuncia qué espera y pasa a esperar
 static void reiniciarFsm() {
     nfcFinishCard();
     memset(emissionBlocks, 0, sizeof(emissionBlocks));
@@ -54,11 +48,8 @@ static void reiniciarFsm() {
 
 void onTamperTriggered() {
     state = STATE_BLOQUEADO;
-    menuAbierto = false;
-    esperandoRol = false;
     // El PIC le cortó el VCC al RC522: soltar sus pines para que no se alimente por ellos
     nfcReleasePins();
-    hmiShowBloqueado();
     linkSendUnoLock(); // {"t":"lock"} hacia Arduino UNO
     linkSendTamper();
 }
@@ -127,23 +118,22 @@ void onGatewaySeal() {
     linkSendWritten(ok);
     nfcFinishCard();
     memset(emissionBlocks, 0, sizeof(emissionBlocks));
-    hmiShowEmisionFin(ok);
     state = STATE_RESULT;
     stateTimer = millis();
 }
 
 void onGatewayCodeReceived(const String& code6) {
-    if (linkGetModo() == MODE_LINKING) {
-        hmiShowCodigo(code6);
-        state = STATE_LINKING;
+    if (linkGetModo() == MODE_LINKING && state == STATE_READING) {
+        linkSendLog("Codigo de vinculacion: " + code6 + " (vence en 2 min)");
+        state = STATE_RESULT;
         stateTimer = millis();
     }
 }
 
 // ─── Función Central de Lectura e Inspección de Cédula ───────────────────────
 
-// Valor del atributo como texto: A1/A2 valen 0x01; A3-A6 son UTF-8, que la pantalla
-// convierte a su codificación. Se quitan los caracteres de control
+// Valor del atributo como texto: A1/A2 valen 0x01; A3-A6 son UTF-8.
+// Se quitan los caracteres de control
 static String valorComoTexto(const CedulaAttribute& attr) {
     String s = "";
     for (int i = 0; i < attr.largo && i < (int)sizeof(attr.valor); i++) {
@@ -225,9 +215,7 @@ void executeCedulaReading(const uint8_t* uid, uint8_t uidLen,
     }
     linkSendLog("============================================================");
 
-    // Salida hacia la pantalla Nextion del ciudadano
     bool esEmergencia = (linkGetModo() == MODE_EMERGENCY);
-    hmiShowResultado(resCode, atributoPedido, esEmergencia);
 
     // Salida hacia el Arduino UNO del comercio (Serial1 en GPIO 25)
     linkSendUnoResult(resCode, atributoPedido, esEmergencia);
@@ -267,7 +255,6 @@ void onGatewayCardSimulate(uint8_t cardIndex) {
 // En el flujo normal se rechaza antes de acercar la cédula, así que no hay handle
 static void enviarRechazo() {
     linkSendLog("Solicitud rechazada por el ciudadano (06)");
-    hmiShowResultado(RES_RECHAZADO, linkGetAtributoPedido(), false);
     linkSendUnoResult(RES_RECHAZADO, linkGetAtributoPedido(), false);
     if (currentHandleOk) {
         linkSendVerif(handleToHex(currentHandle), linkGetAtributoPedido(), RES_RECHAZADO, linkGetCurrentTime(), false);
@@ -276,14 +263,13 @@ static void enviarRechazo() {
 
 // El ciudadano aceptó: recién ahora se espera la cédula, durante CONSENT_TIMEOUT_MS
 static void aceptarSolicitud() {
-    hmiShowAcerque(linkGetNombreLocal());
     linkSendLog("Solicitud aceptada: acerque la cedula (" + String(CONSENT_TIMEOUT_MS / 1000) + " s)");
     state = STATE_ACERQUE;
     stateTimer = millis();
 }
 
-void onGatewayConsentSimulate(bool approved) {
-    // Sin la Nextion, la consola es la única forma de aceptar: decir por qué no aplica
+// Respuesta del ciudadano ('a'/'r' en la consola o {"t":"consent"} del gateway)
+void onGatewayConsent(bool approved) {
     if (linkGetModo() != MODE_VERIFY) {
         linkSendLog("El consentimiento solo aplica en modo verificar");
         return;
@@ -294,8 +280,10 @@ void onGatewayConsentSimulate(bool approved) {
         else linkSendLog("No hay una solicitud esperando respuesta");
         return;
     }
-    if (approved) {
+    if (approved && linkGetAtributoPedido() != 0) {
         aceptarSolicitud();
+    } else if (approved) {
+        linkSendLog("Este terminal no pide ningun dato: no hay nada que aceptar");
     } else {
         enviarRechazo();
         state = STATE_RESULT;
@@ -329,8 +317,7 @@ static bool leerCedula(uint8_t atributo) {
     return true;
 }
 
-static void mostrarLecturaFallida() {
-    hmiShowAviso("No se pudo leer la cédula", "Acérquela de nuevo y no la retire");
+static void lecturaFallida() {
     state = STATE_RESULT;
     stateTimer = millis();
 }
@@ -338,16 +325,15 @@ static void mostrarLecturaFallida() {
 // ─── FSM: Modo Verificación ──────────────────────────────────────────────────
 // Reposo = solicitud: "{local} pide: {dato}". El ciudadano acepta y recién entonces
 // acerca la cédula (roadmap, flujo de verificación); nada se lee antes de aceptar.
+// La respuesta llega por onGatewayConsent().
 
-static void handleVerifyMode(HmiTouchEvent touch) {
+static void handleVerifyMode() {
     switch (state) {
         case STATE_IDLE: {
             if (!linkHasTimeSync()) {
-                hmiShowSinConexion();
                 state = STATE_SIN_HORA;
                 break;
             }
-            hmiShowSolicitud(linkGetNombreLocal(), linkGetAtributoPedido());
             linkSendLog(linkGetNombreLocal() + " pide: " + nombreAtributo(linkGetAtributoPedido()) +
                         ". Esperando que el ciudadano acepte (consola: 'a' acepta, 'r' rechaza)");
             state = STATE_SOLICITUD;
@@ -360,22 +346,10 @@ static void handleVerifyMode(HmiTouchEvent touch) {
             break;
         }
 
-        case STATE_SOLICITUD: {
-            if (touch == TOUCH_ACEPTAR && linkGetAtributoPedido() != 0) {
-                aceptarSolicitud();
-            } else if (touch == TOUCH_RECHAZAR) {
-                // Rechazado por el ciudadano -> Código 06
-                enviarRechazo();
-                state = STATE_RESULT;
-                stateTimer = millis();
-            }
-            break;
-        }
-
         case STATE_ACERQUE: {
-            // Cancelar o no acercar la cédula a tiempo vuelve a la solicitud, sin evento
-            if (touch == TOUCH_CANCELAR || millis() - stateTimer >= CONSENT_TIMEOUT_MS) {
-                linkSendLog(touch == TOUCH_CANCELAR ? "Lectura cancelada" : "No se acerco ninguna tarjeta a tiempo");
+            // No acercar la cédula a tiempo vuelve a la solicitud, sin evento
+            if (millis() - stateTimer >= CONSENT_TIMEOUT_MS) {
+                linkSendLog("No se acerco ninguna tarjeta a tiempo");
                 state = STATE_IDLE;
                 break;
             }
@@ -387,7 +361,6 @@ static void handleVerifyMode(HmiTouchEvent touch) {
                     snprintf(uidHex + strlen(uidHex), sizeof(uidHex) - strlen(uidHex), "%02X%s", currentUid[i], (i < currentUidLen - 1) ? ":" : "");
                 }
                 linkSendLog("[NFC FISICO] Tarjeta fisica detectada en lector RC522! UID: " + String(uidHex));
-                hmiShowVerificando(linkGetNombreLocal());
 
                 // Leer el índice y el atributo pedido con la clave A del rol
                 uint8_t pedido = linkGetAtributoPedido();
@@ -397,7 +370,7 @@ static void handleVerifyMode(HmiTouchEvent touch) {
                     state = STATE_RESULT;
                     stateTimer = millis();
                 } else {
-                    mostrarLecturaFallida();
+                    lecturaFallida();
                 }
                 nfcFinishCard();
             }
@@ -423,11 +396,10 @@ static void handleEmergencyMode() {
     switch (state) {
         case STATE_IDLE: {
             if (!linkHasTimeSync()) {
-                hmiShowSinConexion();
                 state = STATE_SIN_HORA;
                 break;
             }
-            hmiShowEmergenciaEspera();
+            linkSendLog("Modo emergencia: acerque la cedula del paciente");
             state = STATE_ACERQUE;
             break;
         }
@@ -440,12 +412,11 @@ static void handleEmergencyMode() {
 
         case STATE_ACERQUE: {
             if (!nfcDetectCard(currentUid, &currentUidLen)) break;
-            hmiShowVerificando("Modo emergencia");
 
             // En modo emergencia se lee directamente, sin consentimiento, con la clave del rol
             if (!leerCedula(ATTR_A4_SALUD)) {
                 nfcFinishCard();
-                mostrarLecturaFallida();
+                lecturaFallida();
                 break;
             }
 
@@ -469,11 +440,11 @@ static void handleEmergencyMode() {
                     contacto = valorComoTexto(a5);
                 }
 
-                hmiShowEmergencia(sangre, alergias, contacto);
-                state = STATE_EMERGENCY;
+                linkSendLog("[EMERGENCIA] Sangre: " + (sangre.length() > 0 ? sangre : String("sin dato")) +
+                            " | Alergias: " + (alergias.length() > 0 ? alergias : String("ninguna registrada")) +
+                            " | Contacto: " + (contacto.length() > 0 ? contacto : String("sin dato")));
             } else {
-                hmiShowResultado(resCode, ATTR_A4_SALUD, true);
-                state = STATE_RESULT;
+                linkSendLog("[EMERGENCIA] Lectura no aprobada (" + String(resCode) + ")");
             }
 
             linkSendUnoResult(resCode, ATTR_A4_SALUD, true);
@@ -481,15 +452,8 @@ static void handleEmergencyMode() {
                           resCode, linkGetCurrentTime(), true);
 
             nfcFinishCard();
+            state = STATE_RESULT;
             stateTimer = millis();
-            break;
-        }
-
-        case STATE_EMERGENCY: {
-            if (millis() - stateTimer >= EMERGENCY_DISPLAY_MS) {
-                currentHandleOk = false;
-                state = STATE_IDLE;
-            }
             break;
         }
 
@@ -511,7 +475,7 @@ static void handleEmergencyMode() {
 static void handleEmissionMode() {
     switch (state) {
         case STATE_IDLE: {
-            hmiShowEmisionEspera();
+            linkSendLog("Modo emitir: acerque una tarjeta virgen");
             state = STATE_ACERQUE;
             break;
         }
@@ -524,7 +488,6 @@ static void handleEmissionMode() {
             }
             memset(emissionBlocks, 0, sizeof(emissionBlocks));
             linkSendUid(String(uidHex));
-            hmiShowEmisionGrabando();
             state = STATE_EMISSION;
             stateTimer = millis();
             break;
@@ -536,7 +499,6 @@ static void handleEmissionMode() {
                 linkSendLog("Emision abortada: 30 s sin bloques del gateway");
                 nfcFinishCard();
                 memset(emissionBlocks, 0, sizeof(emissionBlocks));
-                hmiShowEmisionFin(false);
                 state = STATE_RESULT;
                 stateTimer = millis();
             }
@@ -558,7 +520,7 @@ static void handleEmissionMode() {
 static void handleLinkingMode() {
     switch (state) {
         case STATE_IDLE: {
-            hmiShowVinculacionEspera();
+            linkSendLog("Modo vincular: acerque la cedula");
             state = STATE_ACERQUE;
             break;
         }
@@ -568,12 +530,12 @@ static void handleLinkingMode() {
             uint8_t handle8[8];
             if (nfcReadHandle(handle8)) {
                 linkSendLink(handleToHex(handle8));
-                hmiShowAviso("Pidiendo el código...", "Ya puede retirar la cédula");
+                linkSendLog("Pidiendo el codigo de vinculacion; ya puede retirar la cedula");
                 state = STATE_READING;
                 stateTimer = millis();
             } else {
                 linkSendLog("[NFC] La tarjeta no tiene indice de cedula");
-                mostrarLecturaFallida();
+                lecturaFallida();
             }
             nfcFinishCard();
             break;
@@ -582,16 +544,10 @@ static void handleLinkingMode() {
         case STATE_READING: {
             // Esperando el código que el gateway pide a la API
             if (millis() - stateTimer >= CODE_WAIT_MS) {
-                hmiShowAviso("No llegó el código", "Revise la conexión del terminal");
+                linkSendLog("No llego el codigo de vinculacion: revise la conexion del gateway");
                 state = STATE_RESULT;
                 stateTimer = millis();
             }
-            break;
-        }
-
-        case STATE_LINKING: {
-            // Mostrando código de 6 dígitos durante 2 min
-            if (millis() - stateTimer >= LINK_CODE_DISPLAY_MS) state = STATE_IDLE;
             break;
         }
 
@@ -603,37 +559,6 @@ static void handleLinkingMode() {
         default:
             break;
     }
-}
-
-// ─── Menú oculto ─────────────────────────────────────────────────────────────
-
-// El rol real está atado al token del gateway: el menú le pide el terminal de ese rol
-// y espera su cfg, que reinicia la FSM con la configuración nueva
-static void atenderMenu(HmiTouchEvent touch) {
-    const char* rol = nullptr;
-    switch (touch) {
-        case TOUCH_MENU_COMERCIO:   rol = "comercio"; break;
-        case TOUCH_MENU_SALUD:      rol = "salud"; break;
-        case TOUCH_MENU_EMERGENCIA: rol = "emergencia"; break;
-        case TOUCH_MENU_TRANSITO:   rol = "transito"; break;
-        case TOUCH_MENU_REGISTRO:   rol = "registro"; break;
-        case TOUCH_MENU_VOLVER:
-            menuAbierto = false;
-            reiniciarFsm();
-            return;
-        default:
-            if (millis() - menuTimer >= MENU_TIMEOUT_MS) {
-                menuAbierto = false;
-                reiniciarFsm();
-            }
-            return;
-    }
-
-    linkSendRol(rol);
-    hmiShowAviso("Cambiando de terminal...", "Rol pedido al gateway: " + String(rol));
-    menuAbierto = false;
-    esperandoRol = true;
-    menuTimer = millis();
 }
 
 // ─── Diagnóstico del lector ──────────────────────────────────────────────────
@@ -811,7 +736,6 @@ void setup() {
     linkInit();
     guardInit();
     storeInit();
-    hmiInit();
     verifyInit();
 
     // Inicializar lector RC522
@@ -859,8 +783,8 @@ void loop() {
         linkSendHb();
     }
 
-    // 4. Configuración nueva del gateway: si cambió el rol, el dato, el local o el modo
-    // (o se esperaba la respuesta del menú oculto), la FSM vuelve a reposo y redibuja
+    // 4. Configuración nueva del gateway: si cambió el rol, el dato, el local o el modo,
+    // la FSM vuelve a reposo
     static uint32_t lastCfg = 0;
     static String cfgRol, cfgLocal;
     static uint8_t cfgAttr = 0;
@@ -873,11 +797,7 @@ void loop() {
         cfgLocal = linkGetNombreLocal();
         cfgAttr = linkGetAtributoPedido();
         cfgModo = linkGetModo();
-        if (cambio || esperandoRol) {
-            menuAbierto = false;
-            esperandoRol = false;
-            reiniciarFsm();
-        }
+        if (cambio) reiniciarFsm();
     }
 
     // Diagnóstico del lector en curso: la FSM retoma desde reposo al terminar
@@ -886,37 +806,10 @@ void loop() {
         return;
     }
 
-    // 5. Pantalla táctil: un evento por vuelta, para el menú oculto o para la FSM
-    HmiTouchEvent touch = hmiCheckTouch();
-    if (touch == TOUCH_REINICIO && state != STATE_EMISSION && state != STATE_READING) {
-        // La Nextion se reinició por su cuenta: redibujar desde reposo
-        menuAbierto = false;
-        reiniciarFsm();
-    }
-    if (menuAbierto) {
-        atenderMenu(touch);
-        return;
-    }
-    if (esperandoRol) {
-        if (millis() - menuTimer >= ROL_TIMEOUT_MS) {
-            linkSendLog("El gateway no respondió al cambio de terminal");
-            esperandoRol = false;
-            reiniciarFsm();
-        }
-        return;
-    }
-    if (touch == TOUCH_MENU_HIDDEN) {
-        nfcFinishCard();
-        menuAbierto = true;
-        menuTimer = millis();
-        hmiShowMenuOculto();
-        return;
-    }
-
-    // 6. Ejecutar la FSM según el modo activo
+    // 5. Ejecutar la FSM según el modo activo
     switch (linkGetModo()) {
         case MODE_VERIFY:
-            handleVerifyMode(touch);
+            handleVerifyMode();
             break;
         case MODE_EMERGENCY:
             handleEmergencyMode();
