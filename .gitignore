@@ -61,6 +61,7 @@ secrets/
 *.db
 api/app
 api/retention
-graphify-out/
 # Build del front (Render lo genera)
 web/dist/
+.vscode/
+firmware/**/.vscode/
