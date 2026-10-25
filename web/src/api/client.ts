@@ -1,6 +1,10 @@
 export const UNAUTHORIZED_EVENT = 'sisa:unauthorized'
 
-export const API_BASE = '/api'
+// VITE_API_URL es el origen del backend (p. ej. "https://api.sisa.example.com"), sin "/api" ni barra final.
+// Vacío: se usa "/api" en el mismo origen (solo si un proxy o rewrite lo conecta al back).
+const API_ORIGIN = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '')
+
+export const API_BASE = `${API_ORIGIN}/api`
 
 export class ApiError extends Error {
   readonly status: number

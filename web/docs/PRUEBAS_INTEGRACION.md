@@ -1,10 +1,10 @@
 # Pruebas de integración en vivo
 
-Checklist para probar el frontend contra el backend real desplegado (Render). Corre con `VITE_USE_MOCK` **sin definir** (o en `false`): así toda la capa `src/api` llama a `/api/*`.
+Checklist para probar el frontend contra el backend real desplegado en otra instancia. Compila con `VITE_USE_MOCK` **sin definir** (o en `false`) y `VITE_API_URL` apuntando al backend: así toda la capa `src/api` llama a `${VITE_API_URL}/api/*` (cross-origin, con credenciales). Antes de empezar, en DevTools > Network comprueba que las peticiones van a la URL del backend y que no hay errores de CORS en la consola.
 
 > Durante las pruebas abre la consola del navegador: en modo real el frontend **no** escribe logs con datos de eventos, de perfil ni de cédulas. Si ves alguno, es un bug.
 
-## a) SSE a través del rewrite de Render
+## a) SSE entre la CDN y el backend
 
 1. Inicia sesión como ciudadano y abre `/` > pestaña **Historial**.
 2. Confirma que el indicador muestra **En vivo**.
@@ -12,14 +12,15 @@ Checklist para probar el frontend contra el backend real desplegado (Render). Co
 4. Genera un evento nuevo (por ejemplo, una lectura desde un terminal) y comprueba que aparece arriba **sin recargar**.
 5. Si el evento no aparece hasta cerrar la conexión o recargar, es **buffering** en algún proxy:
    - Pide al backend las cabeceras `Content-Type: text/event-stream`, `Cache-Control: no-cache` y `X-Accel-Buffering: no`.
-   - Revisa el rewrite de `/api/*` en Render (que no comprima ni almacene la respuesta del stream).
+   - Revisa los proxies entre el navegador y el backend (balanceador, CDN del backend) para que no comprimen ni almacenan la respuesta del stream.
+   - Comprueba que la respuesta del stream trae `Access-Control-Allow-Origin` (origen exacto del front) y `Access-Control-Allow-Credentials: true`.
 6. Con DevTools > Network, filtra por `events/stream`: debe quedar una sola conexión abierta de tipo `eventsource`. Si cae, el frontend reconecta solo (1 s, 2 s, 4 s… máximo 15 s) y el indicador vuelve a **En vivo**.
 
 ## b) Cookie de sesión con `credentials: "include"`
 
 1. Abre DevTools > Network y inicia sesión.
-2. En la respuesta de `POST /api/auth/login`, revisa `Set-Cookie`: debe ser **HttpOnly**, **Secure** y **SameSite=Lax**.
-3. Comprueba que `GET /api/me` **envía la cookie** (pestaña Cookies de la petición o cabecera `Cookie`).
+2. En la respuesta de `POST /api/auth/login`, revisa `Set-Cookie`: debe ser **HttpOnly** y **Secure**, con **SameSite=Lax** si front y back comparten dominio registrable, o **SameSite=None** si son dominios distintos. Revisa también que la respuesta traiga `Access-Control-Allow-Origin` (origen exacto del front) y `Access-Control-Allow-Credentials: true`, y que el *preflight* `OPTIONS` responda bien.
+3. Comprueba que `GET /api/me` **envía la cookie** (pestaña Cookies de la petición o cabecera `Cookie`). Si el navegador la bloquea (cookie de terceros), el login funciona pero `GET /api/me` responde 401 y la sesión no se mantiene: pon front y back bajo el mismo dominio.
 4. **Recarga** la página (F5): la sesión se mantiene y vuelves a tu pantalla sin pasar por `/login`.
 5. Cierra sesión: `POST /api/auth/logout` borra la cookie y vuelves a `/login`.
 6. En Application > Storage verifica que **no** hay tokens en `localStorage` ni en `sessionStorage`.

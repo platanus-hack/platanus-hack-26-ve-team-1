@@ -2,7 +2,26 @@
 
 Endpoints y formas JSON que el frontend de sIsA necesita y que **no están en el contrato** acordado. Hay que confirmarlos o ajustar el frontend.
 
-> Las rutas de auth están definidas en `AUTH_ENDPOINTS` (`api/auth.ts`). Todas son relativas a la base `/api` y se llaman con `credentials: "include"` (JWT en cookie HttpOnly).
+> Las rutas de auth están definidas en `AUTH_ENDPOINTS` (`api/auth.ts`). Todas son relativas a la base `${VITE_API_URL}/api` y se llaman con `credentials: "include"` (JWT en cookie HttpOnly).
+
+## Despliegue: front en CDN, back externo
+
+El front es estático (CDN) y llama directamente al backend en otra instancia: `fetch` y `EventSource` van a `${VITE_API_URL}/api/*` (cross-origin, con credenciales). Lo que el backend debe hacer:
+
+1. **CORS con credenciales** en todas las rutas `/api/*`, incluido el stream SSE y las respuestas de error:
+   - `Access-Control-Allow-Origin: <origen exacto del front>` (no `*`: con credenciales el comodín no vale).
+   - `Access-Control-Allow-Credentials: true`.
+   - `Access-Control-Allow-Headers: Content-Type, Accept` y `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`.
+   - Responder el *preflight* `OPTIONS` (el front envía `Content-Type: application/json` en POST/PUT).
+   - `Vary: Origin`.
+2. **Cookie de sesión** que viaje entre ambos sitios (`HttpOnly` siempre, y `Secure`):
+   - Si front y back comparten dominio registrable (p. ej. `app.sisa.cl` y `api.sisa.cl`): `SameSite=Lax` funciona y es lo preferible. Conviene fijar `Domain=.sisa.cl` solo si hace falta.
+   - Si son dominios distintos (p. ej. `*.onrender.com` y otro): hace falta `SameSite=None; Secure`, y algunos navegadores bloquean cookies de terceros: en ese caso el login no se mantiene. **Recomendado: poner ambos bajo el mismo dominio.**
+3. **SSE** (`/api/events/stream`) con las mismas cabeceras CORS y `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`, keep-alive cada 25 s.
+4. **HTTPS** en ambos (la cookie `Secure` lo exige).
+5. Datos a pasarle al front: la URL pública del backend para `VITE_API_URL`, y el origen del front para configurar CORS.
+
+Preguntas para P1: ¿bajo qué dominio quedará el backend? ¿el front y el back compartirán dominio registrable? ¿cuál es el origen exacto del front para la lista de CORS?
 
 ## Endpoints por confirmar
 
