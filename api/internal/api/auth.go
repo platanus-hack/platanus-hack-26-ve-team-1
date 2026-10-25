@@ -81,16 +81,22 @@ func (s *Server) setCookie(w http.ResponseWriter, r *http.Request, id int64) err
 	if err != nil {
 		return err
 	}
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	sameSite := http.SameSiteLaxMode
-	if secure && s.crossSite(r) {
-		sameSite = http.SameSiteNoneMode // front y API en sitios distintos: la cookie debe viajar entre ambos
-	}
+	secure, sameSite := s.cookieAttrs(r)
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: tok, Path: "/", Expires: exp,
 		HttpOnly: true, SameSite: sameSite, Secure: secure,
 	})
 	return nil
+}
+
+// cookieAttrs da Secure y SameSite de la cookie de sesión; logout debe usar los mismos para poder borrarla.
+func (s *Server) cookieAttrs(r *http.Request) (bool, http.SameSite) {
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	sameSite := http.SameSiteLaxMode
+	if secure && s.crossSite(r) {
+		sameSite = http.SameSiteNoneMode // front y API en sitios distintos: la cookie debe viajar entre ambos
+	}
+	return secure, sameSite
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +187,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
+	secure, sameSite := s.cookieAttrs(r)
+	http.SetCookie(w, &http.Cookie{
+		Name: cookieName, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(0, 0),
+		HttpOnly: true, SameSite: sameSite, Secure: secure,
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
