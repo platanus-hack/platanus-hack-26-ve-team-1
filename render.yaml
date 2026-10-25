@@ -1,6 +1,6 @@
-# Blueprint de Render. Por ahora solo el laboratorio de P4 (HTTPS para probar
-# llave no extraíble, QR y cámara en iPhone y Android).
-# El Web Service de Next.js se añade cuando exista el scaffold de app/ (ver docs/render.md).
+# Blueprint de Render.
+# slj-p4-lab: laboratorio de P4 (HTTPS para probar llave no extraíble, QR y cámara en iPhone y Android).
+# slj-api y slj-web: backend en Go y front. Los servicios reales se crearon a mano en el dashboard.
 services:
   - type: web
     runtime: static
@@ -14,3 +14,42 @@ services:
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
+
+  - type: web
+    name: slj-api
+    runtime: go
+    rootDir: api
+    buildCommand: go build -o app ./cmd/api
+    startCommand: ./app
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ISSUER_NACIONAL_KEY
+        sync: false
+      - key: ISSUER_UNIVERSIDAD_KEY
+        sync: false
+      - key: KAPSO_API_KEY
+        sync: false
+      - key: KAPSO_PHONE_NUMBER_ID
+        sync: false
+      - key: KAPSO_WEBHOOK_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: web
+    name: slj-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://hackathonplatanusvenezuela2026.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

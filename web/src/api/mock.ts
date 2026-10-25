@@ -4,6 +4,7 @@ import type {
   CardInfo,
   CardStatus,
   Citizen,
+  CitizenProfileInput,
   EmissionStatus,
   LoginInput,
   NotificationSettings,
@@ -15,8 +16,14 @@ import type {
   TerminalStats,
   User,
 } from './types'
-import { EMPTY_OPTIONAL_DATA } from '../lib/optionalData'
+import { composeEmergencyContactChipText, EMPTY_OPTIONAL_DATA } from '../lib/optionalData'
 import { ROLES } from '../lib/roles'
+import {
+  CHIP_TEXT_MAX_BYTES,
+  validateBirthDate,
+  validateCedulaNumber,
+  validateMaxBytes,
+} from '../lib/validation'
 
 // Datos de demostración: las contraseñas en texto plano solo existen en el mock.
 type MockAccount = User & { password: string; edad: number }
@@ -401,6 +408,11 @@ export async function mockGetOptionalData(): Promise<OptionalData> {
 export async function mockSaveOptionalData(data: OptionalData): Promise<OptionalData> {
   await delay()
   const user = requireSessionUser()
+  // El backend real rechaza con 400 los textos que no caben en el chip (16 bytes).
+  const chipError =
+    validateMaxBytes(data.alergias, CHIP_TEXT_MAX_BYTES) ??
+    validateMaxBytes(composeEmergencyContactChipText(data.contactoEmergencia), CHIP_TEXT_MAX_BYTES)
+  if (chipError) throw new ApiError(400, chipError)
   sessionStorage.setItem(optionalDataKey(user.id), JSON.stringify(data))
   return data
 }
@@ -479,8 +491,37 @@ export async function mockGetCitizens(): Promise<Citizen[]> {
       email,
       estadoCedula: card?.estado ?? 'sin_emitir',
       emitidaEn: card?.emitidaEn ?? null,
+      perfilCompleto: hasCompleteProfile(id),
     }
   })
+}
+
+// Solo se guarda una marca de "perfil completo": la fecha y la cédula nunca se conservan en el cliente.
+function profileKey(citizenId: string): string {
+  return `sisa:mock-profile:${citizenId}`
+}
+
+/** Las cuentas demo ya tienen perfil; las registradas en el mock lo completan desde /emisor. */
+function hasCompleteProfile(citizenId: string): boolean {
+  return (
+    demoAccounts.some((account) => account.id === citizenId) ||
+    sessionStorage.getItem(profileKey(citizenId)) === '1'
+  )
+}
+
+export async function mockUpdateCitizenProfile(
+  citizenId: string,
+  profile: CitizenProfileInput,
+): Promise<void> {
+  await delay()
+  requireEmisor()
+  const exists =
+    demoAccounts.some((account) => account.id === citizenId) ||
+    loadRegisteredUsers().some((user) => user.id === citizenId)
+  if (!exists) throw new ApiError(404, 'No encontramos a ese ciudadano.')
+  const invalid = validateBirthDate(profile.fechaNacimiento) ?? validateCedulaNumber(profile.cedula)
+  if (invalid) throw new ApiError(400, invalid)
+  sessionStorage.setItem(profileKey(citizenId), '1')
 }
 
 const MOCK_EMISSION_DURATION_MS = 7000
@@ -613,6 +654,9 @@ let mockEmission: { citizenId: string; startedAt: number } | null = null
 export async function mockOrderEmission(citizenId: string): Promise<void> {
   await delay()
   requireEmisor()
+  if (!hasCompleteProfile(citizenId)) {
+    throw new ApiError(409, 'Falta completar el perfil del ciudadano (fecha de nacimiento y cédula).')
+  }
   mockEmission = { citizenId, startedAt: Date.now() }
 }
 

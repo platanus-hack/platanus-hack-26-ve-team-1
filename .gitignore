@@ -53,3 +53,11 @@ tools/slj/slj.exe
 
 # graphify
 graphify-out/
+
+# Secretos y bases locales (SoloLoJusto)
+.env.local
+.env*.local
+secrets/
+*.db
+api/app
+api/retention

@@ -2,7 +2,26 @@
 
 Endpoints y formas JSON que el frontend de sIsA necesita y que **no están en el contrato** acordado. Hay que confirmarlos o ajustar el frontend.
 
-> Las rutas de auth están definidas en `AUTH_ENDPOINTS` (`api/auth.ts`). Todas son relativas a la base `/api` y se llaman con `credentials: "include"` (JWT en cookie HttpOnly).
+> Las rutas de auth están definidas en `AUTH_ENDPOINTS` (`api/auth.ts`). Todas son relativas a la base `${VITE_API_URL}/api` y se llaman con `credentials: "include"` (JWT en cookie HttpOnly).
+
+## Despliegue: front en CDN, back externo
+
+El front es estático (CDN) y llama directamente al backend en otra instancia: `fetch` y `EventSource` van a `${VITE_API_URL}/api/*` (cross-origin, con credenciales). Lo que el backend debe hacer:
+
+1. **CORS con credenciales** en todas las rutas `/api/*`, incluido el stream SSE y las respuestas de error:
+   - `Access-Control-Allow-Origin: <origen exacto del front>` (no `*`: con credenciales el comodín no vale).
+   - `Access-Control-Allow-Credentials: true`.
+   - `Access-Control-Allow-Headers: Content-Type, Accept` y `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`.
+   - Responder el *preflight* `OPTIONS` (el front envía `Content-Type: application/json` en POST/PUT).
+   - `Vary: Origin`.
+2. **Cookie de sesión** que viaje entre ambos sitios (`HttpOnly` siempre, y `Secure`):
+   - Si front y back comparten dominio registrable (p. ej. `app.sisa.cl` y `api.sisa.cl`): `SameSite=Lax` funciona y es lo preferible. Conviene fijar `Domain=.sisa.cl` solo si hace falta.
+   - Si son dominios distintos (p. ej. `*.onrender.com` y otro): hace falta `SameSite=None; Secure`, y algunos navegadores bloquean cookies de terceros: en ese caso el login no se mantiene. **Recomendado: poner ambos bajo el mismo dominio.**
+3. **SSE** (`/api/events/stream`) con las mismas cabeceras CORS y `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`, keep-alive cada 25 s.
+4. **HTTPS** en ambos (la cookie `Secure` lo exige).
+5. Datos a pasarle al front: la URL pública del backend para `VITE_API_URL`, y el origen del front para configurar CORS.
+
+Preguntas para P1: ¿bajo qué dominio quedará el backend? ¿el front y el back compartirán dominio registrable? ¿cuál es el origen exacto del front para la lista de CORS?
 
 ## Endpoints por confirmar
 
@@ -76,9 +95,17 @@ Ya están en el contrato: `POST /api/auth/register`, `POST /api/auth/login` (amb
 ```
 
 - `tipoSangre`: `"A+"`, `"A-"`, `"B+"`, `"B-"`, `"AB+"`, `"AB-"`, `"O+"`, `"O-"` o `null`.
-- `alergias`: string de hasta 200 caracteres (puede ser vacío).
+- `alergias` (A4): texto UTF-8 de **máximo 16 bytes** (puede ser vacío). Cuenta bytes, no caracteres: `á`, `ñ` y los emojis ocupan más de 1.
+- `contactoEmergencia` (A5): el texto que se escribe en el chip es **nombre + teléfono juntos y debe caber en 16 bytes**. El frontend lo compone como `"<nombre> <teléfono sin '+'>"` (constante `EMERGENCY_CONTACT_CHIP_SEPARATOR` y función `composeEmergencyContactChipText`, `lib/optionalData.ts`). Ejemplo: `"Mamá 04141234567"`.
 - `contactoEmergencia.telefono`: formato internacional sin espacios (`+` y 8 a 15 dígitos), o vacío si no hay contacto. Nombre y teléfono van juntos o ambos vacíos.
 - `donante`: booleano.
+- **Límite de 16 bytes en el servidor:** `PUT /api/me/optional-data` debe responder `400` con un mensaje **en español** (el frontend lo muestra tal cual en un toast y conserva lo escrito) cuando `alergias` o el texto combinado del contacto superen 16 bytes UTF-8. El frontend ya lo valida antes de enviar (contador "X/16 bytes").
+
+### Preguntas abiertas para P1 (datos opcionales)
+
+1. ¿El chip guarda **nombre y teléfono juntos** (un solo texto de 16 bytes) o **por separado**? Si es por separado, ¿cuántos bytes tiene cada uno?
+2. ¿El teléfono se guarda **sin `+` ni código de país**? Hoy el frontend pide formato internacional (`+56912345678`) y, para el chip, solo quita el `+` (queda `56912345678`, 11 bytes). Con un teléfono así quedan ~4 bytes para el nombre.
+3. El ejemplo `"Mamá 04141234567"` tiene 16 **caracteres** pero **17 bytes** UTF-8 (la `á` ocupa 2): ¿el límite es de bytes (como se asume) o de caracteres?
 
 ## Bloqueo de cédula y avisos por WhatsApp
 
@@ -109,6 +136,7 @@ Todo lo siguiente es un **supuesto del frontend**, pendiente de confirmar con P1
 | `POST` | `/api/emision/order` | `{ "ciudadanoId": "u-123" }` | `2xx`. Deja al terminal en modo emisión esperando una tarjeta virgen. |
 | `GET` | `/api/emision/status` | — | `200` con `{ "estado": "pendiente" \| "completado" \| "error", "mensaje"?: "..." }`: estado de la emisión en curso del emisor. |
 | `POST` | `/api/revoke` | `{ "ciudadanoId": "u-123" }` | `2xx`. El emisor revoca la cédula de otro ciudadano (distinto del bloqueo propio, que va sin cuerpo). |
+| `PUT` | `/api/citizens/{id}/profile` | `{ "fechaNacimiento": "1999-04-30", "cedula": "12345678" }` | `2xx`. Completa el perfil del ciudadano. **Solo lo acepta el rol `emisor`** (otro rol: `403`). `fechaNacimiento` en `YYYY-MM-DD`; `cedula` solo dígitos (el frontend valida 6 a 9). Errores `400` con mensaje en español. |
 
 ```json
 {
@@ -116,11 +144,13 @@ Todo lo siguiente es un **supuesto del frontend**, pendiente de confirmar con P1
   "nombre": "Ana Pérez",
   "email": "ana@sisa.demo",
   "estadoCedula": "activa",
-  "emitidaEn": "2026-03-12T10:00:00Z"
+  "emitidaEn": "2026-03-12T10:00:00Z",
+  "perfilCompleto": true
 }
 ```
 
 - `estadoCedula`: `"activa"`, `"revocada"` o `"sin_emitir"` (en ese caso `emitidaEn` es `null`).
+- **`GET /api/citizens` debe devolver `perfilCompleto`** (`true` si el ciudadano ya tiene fecha de nacimiento y cédula). Sin perfil completo el frontend deshabilita "Emitir cédula" y ofrece "Completar perfil". **No debe devolver la fecha de nacimiento ni la cédula**: el frontend nunca las muestra ni las guarda tras enviarlas. Además, `POST /api/emision/order` debería rechazar (`409`/`400`) a un ciudadano sin perfil completo.
 - `id` es interno: el frontend lo usa solo para llamar a la API y nunca lo muestra (tampoco handles ni UID).
 - El frontend consulta `GET /api/emision/status` cada **2 s** y se rinde a los **2 minutos** (muestra un error al emisor). Deja de consultar si el emisor cierra el panel.
 - Preguntas abiertas para P1:
@@ -128,7 +158,8 @@ Todo lo siguiente es un **supuesto del frontend**, pendiente de confirmar con P1
   2. ¿La lista de ciudadanos admite paginación o búsqueda en servidor?
   3. **¿Qué terminal atiende `POST /api/emision/order`?** Si hay varios terminales en modo emisión, ¿cómo se elige uno (por emisor, por sesión, por id de terminal)? El frontend no envía ningún id de terminal.
   4. **Validación en servidor de `{ "ciudadanoId" }` en `POST /api/revoke`:** solo debe aceptarse si la sesión tiene rol `emisor`; un ciudadano que envíe ese campo debe recibir `403` (el ciudadano solo puede bloquear su propia cédula, sin cuerpo).
-  5. **Confirmar que `GET /api/citizens` devuelve únicamente** `id` (interno), `nombre`, `email`, `estadoCedula` y `emitidaEn`, **sin handle ni UID**.
+  5. **Confirmar que `GET /api/citizens` devuelve únicamente** `id` (interno), `nombre`, `email`, `estadoCedula`, `emitidaEn` y `perfilCompleto`, **sin handle ni UID** y sin fecha de nacimiento ni cédula.
+  6. ¿Cuántos dígitos tiene un número de cédula válido? El frontend acepta de 6 a 9 (`CEDULA_MIN_DIGITS` / `CEDULA_MAX_DIGITS`, `lib/validation.ts`).
 - El frontend tolera hasta 3 errores HTTP seguidos en `GET /api/emision/status` antes de marcar fallo; una respuesta correcta reinicia la cuenta. Si el emisor cierra el panel con la emisión pendiente (tras confirmar), el frontend solo deja de consultar: **no cancela** la orden en el servidor (no hay endpoint de cancelación).
 
 ## Panel del emisor, pestaña "Universidad": endpoints supuestos

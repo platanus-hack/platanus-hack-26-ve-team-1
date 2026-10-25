@@ -5,6 +5,8 @@ type InputProps = Omit<ComponentProps<'input'>, 'id'> & {
   label: string
   error?: string
   hint?: string
+  /** Ids de otros elementos que describen el campo (p. ej. un contador), además del hint y el error. */
+  describedBy?: string
   id?: string
 }
 
@@ -12,6 +14,7 @@ export function Input({
   label,
   error,
   hint,
+  describedBy: extraDescribedBy,
   id,
   className,
   ...props
@@ -21,7 +24,7 @@ export function Input({
   const hintId = `${inputId}-hint`
   const errorId = `${inputId}-error`
   const describedBy =
-    [hint && hintId, error && errorId].filter(Boolean).join(' ') || undefined
+    [hint && hintId, extraDescribedBy, error && errorId].filter(Boolean).join(' ') || undefined
 
   return (
     <div className="flex flex-col gap-2">

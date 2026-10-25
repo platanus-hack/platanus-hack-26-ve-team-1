@@ -1,0 +1,77 @@
+{
+  "ana_alterada": {
+    "uid": "A1B2C3D4",
+    "issuer": "nacional",
+    "sectors": {
+      "1": [
+        "019e429475799fc8ed00000000000000",
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000"
+      ],
+      "2": [
+        "010101016cbe09819e429475799fc8ed",
+        "00000000000000000000000000000000",
+        "9ed3ac38c8c097db6922edfc9d596019"
+      ],
+      "3": [
+        "bc19b1ae6da7dd652cc795b3b27aa089",
+        "f9f91a12bb06d5ea8ceefb05960876ef",
+        "ea1cd21d91188ad0c23c3dcf4a6373d3"
+      ]
+    },
+    "expect": {
+      "expired": false,
+      "signature_valid": false
+    }
+  },
+  "ana_valida": {
+    "uid": "A1B2C3D4",
+    "issuer": "nacional",
+    "sectors": {
+      "1": [
+        "019e429475799fc8ed00000000000000",
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000"
+      ],
+      "2": [
+        "010101016cbe09819e429475799fc8ed",
+        "01000000000000000000000000000000",
+        "66f07e89fcca43d8e579af7b7e778907"
+      ],
+      "3": [
+        "376c17bec313d29b6fa6b157c568578d",
+        "5039b2fe0f810b5fba1fad7fd2bfcaf6",
+        "50d29919bac1018aa0cf0fb64dffcfe9"
+      ]
+    },
+    "expect": {
+      "expired": false,
+      "signature_valid": true
+    }
+  },
+  "ana_vencida": {
+    "uid": "A1B2C3D4",
+    "issuer": "nacional",
+    "sectors": {
+      "1": [
+        "019e429475799fc8ed00000000000000",
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000"
+      ],
+      "2": [
+        "010101016adb84819e429475799fc8ed",
+        "01000000000000000000000000000000",
+        "fd06c74e300d5d40c8fe20da69acc1bf"
+      ],
+      "3": [
+        "b3160702b082bad8df0edf7075c52d47",
+        "abe0970e90e6cb254c179e085d6b6c57",
+        "2d7bbdfcecce9ab5e27463c3f0361cbd"
+      ]
+    },
+    "expect": {
+      "expired": true,
+      "signature_valid": true
+    }
+  }
+}

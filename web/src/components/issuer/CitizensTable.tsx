@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { Citizen, CitizenCardStatus } from '../../api/types'
 import type { BadgeVariant } from '../ui'
 import { formatDate } from '../../lib/format'
@@ -13,6 +14,7 @@ type CitizensTableProps = {
   citizens: Citizen[]
   onEmit: (citizen: Citizen) => void
   onRevoke: (citizen: Citizen) => void
+  onCompleteProfile: (citizen: Citizen) => void
   /** Deshabilita todas las acciones mientras hay una emisión o una revocación en curso. */
   disabled?: boolean
 }
@@ -21,10 +23,13 @@ function RowActions({
   citizen,
   onEmit,
   onRevoke,
+  onCompleteProfile,
   disabled,
 }: {
   citizen: Citizen
-} & Pick<CitizensTableProps, 'onEmit' | 'onRevoke' | 'disabled'>) {
+} & Pick<CitizensTableProps, 'onEmit' | 'onRevoke' | 'onCompleteProfile' | 'disabled'>) {
+  const missingProfileId = useId()
+
   // Una cédula activa solo se puede revocar; sin cédula o revocada, se puede emitir una nueva.
   if (citizen.estadoCedula === 'activa') {
     return (
@@ -38,6 +43,35 @@ function RowActions({
       </Button>
     )
   }
+
+  // Sin fecha de nacimiento y cédula no se puede emitir: primero se completa el perfil.
+  if (!citizen.perfilCompleto) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => onCompleteProfile(citizen)}
+            disabled={disabled}
+            aria-label={`Completar el perfil de ${citizen.nombre}`}
+          >
+            Completar perfil
+          </Button>
+          <Button
+            variant="secondary"
+            disabled
+            aria-describedby={missingProfileId}
+            aria-label={`Emitir cédula a ${citizen.nombre}`}
+          >
+            Emitir cédula
+          </Button>
+        </div>
+        <p id={missingProfileId} className="text-base text-neutral-600">
+          Falta fecha de nacimiento y cédula
+        </p>
+      </div>
+    )
+  }
+
   return (
     <Button
       onClick={() => onEmit(citizen)}
@@ -59,7 +93,13 @@ function issuedOn(citizen: Citizen): string {
 }
 
 /** Tabla en pantallas anchas; en móvil se degrada a una tarjeta por ciudadano. */
-export function CitizensTable({ citizens, onEmit, onRevoke, disabled }: CitizensTableProps) {
+export function CitizensTable({
+  citizens,
+  onEmit,
+  onRevoke,
+  onCompleteProfile,
+  disabled,
+}: CitizensTableProps) {
   return (
     <>
       <div className="hidden overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm md:block">
@@ -90,6 +130,7 @@ export function CitizensTable({ citizens, onEmit, onRevoke, disabled }: Citizens
                     citizen={citizen}
                     onEmit={onEmit}
                     onRevoke={onRevoke}
+                    onCompleteProfile={onCompleteProfile}
                     disabled={disabled}
                   />
                 </td>
@@ -114,6 +155,7 @@ export function CitizensTable({ citizens, onEmit, onRevoke, disabled }: Citizens
                   citizen={citizen}
                   onEmit={onEmit}
                   onRevoke={onRevoke}
+                  onCompleteProfile={onCompleteProfile}
                   disabled={disabled}
                 />
               </div>

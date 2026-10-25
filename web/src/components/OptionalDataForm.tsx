@@ -4,10 +4,17 @@ import type { Attribute, OptionalData } from '../api/types'
 import { useToast } from '../hooks/useToast'
 import { ATTRIBUTE_INFO } from '../lib/attributes'
 import { getErrorMessage } from '../lib/errors'
-import { BLOOD_TYPES, EMPTY_OPTIONAL_DATA, type BloodType } from '../lib/optionalData'
 import {
+  BLOOD_TYPES,
+  EMPTY_OPTIONAL_DATA,
+  composeEmergencyContactChipText,
+  type BloodType,
+} from '../lib/optionalData'
+import {
+  CHIP_TEXT_MAX_BYTES,
+  countBytes,
   normalizePhone,
-  validateAllergies,
+  validateMaxBytes,
   validatePhone,
 } from '../lib/validation'
 import { Badge, Button, Card, Checkbox, EmptyState, Input, Select, Spinner } from './ui'
@@ -56,7 +63,7 @@ function validate(values: FormValues): FieldErrors {
   if (values.tipoSangre && !BLOOD_TYPES.includes(values.tipoSangre)) {
     errors.tipoSangre = 'Elige un tipo de sangre de la lista.'
   }
-  errors.alergias = validateAllergies(values.alergias)
+  errors.alergias = undefined
 
   // El contacto es opcional, pero si se llena una parte hay que llenar la otra.
   const nombre = values.contactoNombre.trim()
@@ -66,6 +73,33 @@ function validate(values: FormValues): FieldErrors {
     errors.contactoTelefono = validatePhone(telefono)
   }
   return errors
+}
+
+/** Errores de límite de bytes del chip; se calculan en vivo y bloquean el guardado. */
+function chipByteErrors(values: FormValues): { alergias?: string; contacto?: string } {
+  return {
+    alergias: validateMaxBytes(values.alergias.trim(), CHIP_TEXT_MAX_BYTES),
+    contacto: validateMaxBytes(
+      composeEmergencyContactChipText({
+        nombre: values.contactoNombre,
+        telefono: values.contactoTelefono,
+      }),
+      CHIP_TEXT_MAX_BYTES,
+    ),
+  }
+}
+
+function ByteCounter({ id, bytes, label }: { id: string; bytes: number; label?: string }) {
+  const exceeded = bytes > CHIP_TEXT_MAX_BYTES
+  return (
+    <p
+      id={id}
+      className={exceeded ? 'text-base font-semibold text-denied-700' : 'text-base text-neutral-600'}
+    >
+      {label ? `${label}: ` : ''}
+      {bytes}/{CHIP_TEXT_MAX_BYTES} bytes
+    </p>
+  )
 }
 
 function ReaderNote({ id, attribute }: { id: string; attribute: Attribute }) {
@@ -105,6 +139,7 @@ function Group({
 
 export function OptionalDataForm() {
   const { toast } = useToast()
+  const formId = useId()
   const [load, setLoad] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [values, setValues] = useState<FormValues>(() =>
@@ -150,7 +185,14 @@ export function OptionalDataForm() {
     event.preventDefault()
     const nextErrors = validate(values)
     setErrors(nextErrors)
-    if (Object.values(nextErrors).some(Boolean)) return
+    const byteErrors = chipByteErrors(values)
+    if (
+      Object.values(nextErrors).some(Boolean) ||
+      byteErrors.alergias ||
+      byteErrors.contacto
+    ) {
+      return
+    }
 
     setSaving(true)
     try {
@@ -159,6 +201,7 @@ export function OptionalDataForm() {
       setSaved(true)
       toast({ title: 'Datos guardados', variant: 'ok' })
     } catch (error) {
+      // Si el backend rechaza el límite del chip (400), su mensaje llega en el toast y se conserva lo escrito.
       toast({
         title: 'No se pudieron guardar tus datos',
         description: getErrorMessage(error),
@@ -168,6 +211,17 @@ export function OptionalDataForm() {
       setSaving(false)
     }
   }
+
+  const byteErrors = chipByteErrors(values)
+  const allergiesBytes = countBytes(values.alergias.trim())
+  const contactBytes = countBytes(
+    composeEmergencyContactChipText({
+      nombre: values.contactoNombre,
+      telefono: values.contactoTelefono,
+    }),
+  )
+  const allergiesCounterId = `${formId}-alergias-bytes`
+  const contactCounterId = `${formId}-contacto-bytes`
 
   return (
     <section aria-labelledby="datos-opcionales" className="flex flex-col gap-4">
@@ -214,33 +268,46 @@ export function OptionalDataForm() {
                   </option>
                 ))}
               </Select>
-              <Input
-                label="Alergias"
-                hint="Por ejemplo: penicilina, maní."
-                value={values.alergias}
-                onChange={(event) => update('alergias', event.target.value)}
-                error={errors.alergias}
-              />
+              <div className="flex flex-col gap-1">
+                <Input
+                  label="Alergias"
+                  hint="Por ejemplo: polen. Se escribe en tu chip."
+                  describedBy={allergiesCounterId}
+                  value={values.alergias}
+                  onChange={(event) => update('alergias', event.target.value)}
+                  error={byteErrors.alergias}
+                />
+                <ByteCounter id={allergiesCounterId} bytes={allergiesBytes} />
+              </div>
             </Group>
 
             <Group title="Contacto de emergencia" attribute="contacto_emergencia">
               <Input
                 label="Nombre del contacto"
                 autoComplete="off"
+                describedBy={contactCounterId}
                 value={values.contactoNombre}
                 onChange={(event) => update('contactoNombre', event.target.value)}
-                error={errors.contactoNombre}
+                error={errors.contactoNombre ?? byteErrors.contacto}
               />
-              <Input
-                label="Teléfono del contacto"
-                type="tel"
-                autoComplete="off"
-                placeholder="+56 9 1234 5678"
-                hint="Con código de país, por ejemplo +56 9 1234 5678."
-                value={values.contactoTelefono}
-                onChange={(event) => update('contactoTelefono', event.target.value)}
-                error={errors.contactoTelefono}
-              />
+              <div className="flex flex-col gap-1">
+                <Input
+                  label="Teléfono del contacto"
+                  type="tel"
+                  autoComplete="off"
+                  placeholder="+56 9 1234 5678"
+                  hint="Con código de país, por ejemplo +56 9 1234 5678."
+                  describedBy={contactCounterId}
+                  value={values.contactoTelefono}
+                  onChange={(event) => update('contactoTelefono', event.target.value)}
+                  error={errors.contactoTelefono}
+                />
+                <ByteCounter
+                  id={contactCounterId}
+                  bytes={contactBytes}
+                  label="Nombre y teléfono juntos en el chip"
+                />
+              </div>
             </Group>
 
             <Group title="Donación" attribute="donante_licencia">
