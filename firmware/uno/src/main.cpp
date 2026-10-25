@@ -111,6 +111,17 @@ void pantallaResultado(const char *res, const char *a, bool emg)
     resultado_desde = millis() | 1;   // nunca 0
 }
 
+void pantallaAutorizacion(const char *a)
+{
+    resultado_desde = 0;   // se queda hasta que llegue el resultado
+    tft.fillScreen(NEGRO);
+    tft.fillCircle(tft.width() / 2, 90, 65, AMBAR);
+    centrado(F("..."), 70, 6, BLANCO);
+    centrado(F("Esperando autorizaci\xA2n"), 180, 3, AMBAR);
+    centrado(nombreAtributo(a), 230, 3, BLANCO);
+    pie();
+}
+
 void pantallaBloqueo()
 {
     bloqueado = true;
@@ -137,6 +148,10 @@ void procesar(const char *texto)
     else if (!strcmp(t, "idle"))
     {
         pantallaEspera();
+    }
+    else if (!strcmp(t, "wait") && !bloqueado)
+    {
+        pantallaAutorizacion(doc["a"] | "");
     }
     else if (!strcmp(t, "res") && !bloqueado)
     {

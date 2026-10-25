@@ -153,13 +153,29 @@ static const uint8_t* handleParaEvento(const char* resCode, const CedulaAttribut
     return firmaVerificada ? attr.handle : handleIndice;
 }
 
-void executeCedulaReading(const uint8_t* uid, uint8_t uidLen,
-                          const CedulaAttribute& attr,
-                          uint8_t atributoPedido,
-                          bool authOk,
-                          const uint8_t* handleIndice,
-                          const char* titularNombre,
-                          bool enviarEvento) {
+// Resultado aprobado (01) que espera la respuesta del ciudadano antes de mostrarse
+static struct {
+    uint8_t atributo;
+    uint8_t handle[8];
+    bool enviarEvento;   // false en las pruebas con vectores: su handle no es de una cédula emitida
+} pendiente;
+
+// Muestra un resultado en el UNO y, si corresponde, envía el evento verif al gateway
+static void publicarResultado(const char* resCode, uint8_t atributo, const uint8_t* handle, bool enviarEvento) {
+    linkSendUnoResult(resCode, atributo, false);
+    if (enviarEvento) {
+        linkSendVerif(handleToHex(handle), atributo, resCode, linkGetCurrentTime(), false);
+    }
+    state = STATE_RESULT;
+    stateTimer = millis();
+}
+
+// Verifica el atributo leído, lo registra en el log y devuelve el código de resultado
+static const char* evaluarCedula(const uint8_t* uid, uint8_t uidLen,
+                                 const CedulaAttribute& attr,
+                                 uint8_t atributoPedido,
+                                 bool authOk,
+                                 const char* titularNombre) {
     char uidBuf[32] = {0};
     for (int i = 0; i < uidLen; i++) {
         snprintf(uidBuf + strlen(uidBuf), sizeof(uidBuf) - strlen(uidBuf), "%02X%s", uid[i], (i < uidLen - 1) ? ":" : "");
@@ -214,22 +230,37 @@ void executeCedulaReading(const uint8_t* uid, uint8_t uidLen,
         linkSendLog("      Motivo: " + motivo);
     }
     linkSendLog("============================================================");
+    return resCode;
+}
 
-    bool esEmergencia = (linkGetModo() == MODE_EMERGENCY);
-
-    // Salida hacia el Arduino UNO del comercio (Serial1 en GPIO 25)
-    linkSendUnoResult(resCode, atributoPedido, esEmergencia);
-
-    // Evento JSON formal hacia el Gateway (USB Serial)
-    if (enviarEvento) {
-        const uint8_t* handleEvento = handleParaEvento(resCode, attr, handleIndice);
-        linkSendVerif(handleToHex(handleEvento), atributoPedido, resCode, linkGetCurrentTime(), esEmergencia);
+// Tras verificar: un 01 se guarda y se pide permiso al ciudadano, que responde por
+// WhatsApp; 02-05 se muestran de inmediato, porque no hay un dato válido que compartir
+static void resolverLectura(const char* resCode, uint8_t atributo, const CedulaAttribute& attr,
+                            const uint8_t* handleIndice, bool enviarEvento) {
+    const uint8_t* handle = handleParaEvento(resCode, attr, handleIndice);
+    if (strcmp(resCode, RES_APROBADO) != 0) {
+        publicarResultado(resCode, atributo, handle, enviarEvento);
+        return;
     }
+
+    pendiente.atributo = atributo;
+    memcpy(pendiente.handle, handle, 8);
+    pendiente.enviarEvento = enviarEvento;
+    if (enviarEvento) linkSendPedido(handleToHex(handle), atributo);
+    linkSendUnoWait(atributo);
+    linkSendLog("Esperando la respuesta del ciudadano (" + String(CONSENT_TIMEOUT_MS / 1000) +
+                " s; consola: 'a' acepta, 'r' rechaza)");
+    state = STATE_SOLICITUD;
+    stateTimer = millis();
 }
 
 void onGatewayCardSimulate(uint8_t cardIndex) {
     if (linkGetModo() != MODE_VERIFY) {
         linkSendLog("La simulacion de tarjeta solo funciona en modo verificar");
+        return;
+    }
+    if (state == STATE_SOLICITUD) {
+        linkSendLog("Hay una lectura esperando la respuesta del ciudadano ('a' o 'r')");
         return;
     }
 
@@ -242,53 +273,22 @@ void onGatewayCardSimulate(uint8_t cardIndex) {
     currentAttr = vec->attr;
     authSuccess = true;
 
-    // Prueba de consola: pantallas y criptografía, sin enviar el evento al backend
-    // (el handle de los vectores no es de una cédula emitida)
-    executeCedulaReading(currentUid, currentUidLen, currentAttr, vec->attr.atributo, authSuccess,
-                         vec->attr.handle, vec->nombre, false);
-
-    state = STATE_RESULT;
-    stateTimer = millis();
+    // Prueba de consola: pantallas, criptografía y consentimiento, sin enviar eventos al backend
+    const char* resCode = evaluarCedula(currentUid, currentUidLen, currentAttr, vec->attr.atributo,
+                                        authSuccess, vec->nombre);
+    resolverLectura(resCode, vec->attr.atributo, currentAttr, vec->attr.handle, false);
 }
 
-// Rechazo del ciudadano (06): solo se informa al backend si hay una cédula identificada.
-// En el flujo normal se rechaza antes de acercar la cédula, así que no hay handle
-static void enviarRechazo() {
-    linkSendLog("Solicitud rechazada por el ciudadano (06)");
-    linkSendUnoResult(RES_RECHAZADO, linkGetAtributoPedido(), false);
-    if (currentHandleOk) {
-        linkSendVerif(handleToHex(currentHandle), linkGetAtributoPedido(), RES_RECHAZADO, linkGetCurrentTime(), false);
-    }
-}
-
-// El ciudadano aceptó: recién ahora se espera la cédula, durante CONSENT_TIMEOUT_MS
-static void aceptarSolicitud() {
-    linkSendLog("Solicitud aceptada: acerque la cedula (" + String(CONSENT_TIMEOUT_MS / 1000) + " s)");
-    state = STATE_ACERQUE;
-    stateTimer = millis();
-}
-
-// Respuesta del ciudadano ('a'/'r' en la consola o {"t":"consent"} del gateway)
+// Respuesta del ciudadano ({"t":"consent"} del gateway, o 'a'/'r' en la consola):
+// libera el 01 guardado o lo cambia por 06
 void onGatewayConsent(bool approved) {
-    if (linkGetModo() != MODE_VERIFY) {
-        linkSendLog("El consentimiento solo aplica en modo verificar");
-        return;
-    }
     if (state != STATE_SOLICITUD) {
-        if (state == STATE_SIN_HORA) linkSendLog("Sin hora del gateway: todavia no hay solicitud que aceptar");
-        else if (state == STATE_ACERQUE) linkSendLog("La solicitud ya fue aceptada: acerque la cedula");
-        else linkSendLog("No hay una solicitud esperando respuesta");
+        linkSendLog("No hay una lectura esperando la respuesta del ciudadano");
         return;
     }
-    if (approved && linkGetAtributoPedido() != 0) {
-        aceptarSolicitud();
-    } else if (approved) {
-        linkSendLog("Este terminal no pide ningun dato: no hay nada que aceptar");
-    } else {
-        enviarRechazo();
-        state = STATE_RESULT;
-        stateTimer = millis();
-    }
+    linkSendLog(approved ? "El ciudadano acepto compartir el dato (01)" : "El ciudadano rechazo compartir el dato (06)");
+    publicarResultado(approved ? RES_APROBADO : RES_RECHAZADO, pendiente.atributo, pendiente.handle,
+                      pendiente.enviarEvento);
 }
 
 // ─── Lectura de la cédula presente ───────────────────────────────────────────
@@ -323,9 +323,10 @@ static void lecturaFallida() {
 }
 
 // ─── FSM: Modo Verificación ──────────────────────────────────────────────────
-// Reposo = solicitud: "{local} pide: {dato}". El ciudadano acepta y recién entonces
-// acerca la cédula (roadmap, flujo de verificación); nada se lee antes de aceptar.
-// La respuesta llega por onGatewayConsent().
+// "{local} pide: {dato}". El ciudadano acerca la cédula; el terminal la lee y la
+// verifica, pero un resultado aprobado no se muestra ni se informa hasta que el
+// ciudadano lo autoriza por WhatsApp (onGatewayConsent). Sin respuesta en
+// CONSENT_TIMEOUT_MS cuenta como rechazo (06).
 
 static void handleVerifyMode() {
     switch (state) {
@@ -334,9 +335,13 @@ static void handleVerifyMode() {
                 state = STATE_SIN_HORA;
                 break;
             }
-            linkSendLog(linkGetNombreLocal() + " pide: " + nombreAtributo(linkGetAtributoPedido()) +
-                        ". Esperando que el ciudadano acepte (consola: 'a' acepta, 'r' rechaza)");
-            state = STATE_SOLICITUD;
+            if (linkGetAtributoPedido() == 0) {
+                linkSendLog("Este terminal no pide ningun dato: no se leen cedulas");
+            } else {
+                linkSendLog(linkGetNombreLocal() + " pide: " + nombreAtributo(linkGetAtributoPedido()) +
+                            ". Acerque la cedula");
+            }
+            state = STATE_ACERQUE;
             break;
         }
 
@@ -346,13 +351,16 @@ static void handleVerifyMode() {
             break;
         }
 
-        case STATE_ACERQUE: {
-            // No acercar la cédula a tiempo vuelve a la solicitud, sin evento
+        case STATE_SOLICITUD: {
             if (millis() - stateTimer >= CONSENT_TIMEOUT_MS) {
-                linkSendLog("No se acerco ninguna tarjeta a tiempo");
-                state = STATE_IDLE;
-                break;
+                linkSendLog("El ciudadano no respondio a tiempo (06)");
+                publicarResultado(RES_RECHAZADO, pendiente.atributo, pendiente.handle, pendiente.enviarEvento);
             }
+            break;
+        }
+
+        case STATE_ACERQUE: {
+            if (linkGetAtributoPedido() == 0) break;
 
             // Sondeo de tarjeta en el RC522
             if (nfcDetectCard(currentUid, &currentUidLen)) {
@@ -365,10 +373,9 @@ static void handleVerifyMode() {
                 // Leer el índice y el atributo pedido con la clave A del rol
                 uint8_t pedido = linkGetAtributoPedido();
                 if (leerCedula(pedido)) {
-                    executeCedulaReading(currentUid, currentUidLen, currentAttr, pedido, authSuccess,
-                                         currentHandle, "Cedula Fisica Leida", true);
-                    state = STATE_RESULT;
-                    stateTimer = millis();
+                    const char* resCode = evaluarCedula(currentUid, currentUidLen, currentAttr, pedido,
+                                                        authSuccess, "Cedula Fisica Leida");
+                    resolverLectura(resCode, pedido, currentAttr, currentHandle, true);
                 } else {
                     lecturaFallida();
                 }
@@ -697,7 +704,7 @@ static void imprimirDiagnostico(const NfcDiagnostico& d) {
         linkSendLog("[SCAN] La tarjeta se retiro antes de terminar: mantengala quieta y repita 'scan'");
     } else if (esCedula) {
         linkSendLog(fabrica ? "[SCAN] Cedula emitida pero sin sellar (trailers de fabrica)"
-                            : "[SCAN] Cedula emitida. En modo verificar: hora, 'a' y acercarla antes de 10 s");
+                            : "[SCAN] Cedula emitida. En modo verificar: con hora, acercarla y responder la solicitud");
     } else if (conDatos == 0 && !desconocida) {
         linkSendLog(fabrica ? "[SCAN] Tarjeta vacia (virgen): todos los bloques de datos en blanco. Se graba en modo emitir"
                             : "[SCAN] Tarjeta vacia, pero con sectores sellados con las claves del sistema");

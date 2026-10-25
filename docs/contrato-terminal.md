@@ -48,6 +48,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 |-|-|
 | `{"t":"hb"}` | Cada 5 s. Mientras no tenga hora (recién arrancado) envía `{"t":"hb","sync":false}` y el gateway responde con `time`, `rev` y `cfg` |
 | `{"t":"verif","h":"…","a":"A1","res":"01","ts":1761300000,"emg":false}` | Tras cada lectura |
+| `{"t":"pedido","h":"…","a":"A1"}` | Modo verificar: la lectura dio `01` y espera la autorización del ciudadano. El gateway se la pide por WhatsApp y responde `consent`. El lector no muestra ni informa el `01` hasta entonces |
 | `{"t":"tamper"}` | `BLOQ_IN` pasó a ALTO |
 | `{"t":"uid","uid":"04A1B2C3"}` | Modo emitir: tarjeta virgen leída |
 | `{"t":"link","h":"…"}` | Modo vincular: handle leído |
@@ -65,6 +66,7 @@ Una lectura de emergencia aprobada es `res = "01"` con `emg = true`.
 | `{"t":"write","s":1,"b":0,"d":"<32 hex>"}` | Modo emitir, un bloque de datos a la vez (`s` 1–14, `b` 0–2); espera el `ack` |
 | `{"t":"seal"}` | Modo emitir, tras el `ack` del último bloque: el lector graba los trailers con las claves por rol y responde `written` |
 | `{"t":"code","c":"123456"}` | Modo vincular |
+| `{"t":"consent","approved":true}` | Respuesta del ciudadano a un `pedido`. `true` muestra el `01` y envía `verif`; `false`, o 60 s sin respuesta, da `06` |
 
 El lector se reinicia al abrir el puerto, así que el gateway espera el primer `hb` antes de enviar. Sin `time` el lector no verifica cédulas, porque no puede comprobar la vigencia.
 
@@ -86,6 +88,7 @@ Un solo cable: TX del lector → **pin 0 (RX) del UNO**, más GND común. 9600 b
 | Mensaje | Pantalla |
 |-|-|
 | `{"t":"res","res":"01","a":"A1","emg":false}` | Muestra el resultado unos 6 s y vuelve a espera |
+| `{"t":"wait","a":"A1"}` | "Esperando autorización" hasta recibir `res` |
 | `{"t":"lock"}` | "Terminal bloqueado" hasta recibir `idle` |
 | `{"t":"idle"}` | Pantalla de espera |
 

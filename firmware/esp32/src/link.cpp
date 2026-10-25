@@ -133,6 +133,30 @@ void linkSendLog(const String& mensaje) {
     Serial.println();
 }
 
+void linkSendPedido(const String& handleHex, uint8_t atributo) {
+    char attrStr[8];
+    snprintf(attrStr, sizeof(attrStr), "A%u", atributo);
+
+    JsonDocument doc;
+    doc["t"] = "pedido";
+    doc["h"] = handleHex;
+    doc["a"] = attrStr;
+    serializeJson(doc, Serial);
+    Serial.println();
+}
+
+void linkSendUnoWait(uint8_t atributo) {
+    // Contrato Arduino UNO: {"t":"wait","a":"A1"} ("Esperando autorización" hasta el res)
+    char attrStr[8];
+    snprintf(attrStr, sizeof(attrStr), "A%u", atributo);
+
+    JsonDocument doc;
+    doc["t"] = "wait";
+    doc["a"] = attrStr;
+    serializeJson(doc, Serial1);
+    Serial1.println();
+}
+
 void linkSendUnoResult(const char* resCode, uint8_t atributo, bool emergencia) {
     // Regla de P3: No mandar códigos 07 ni 08 (el UNO los muestra como "Error de lectura")
     const char* safeRes = resCode;
@@ -203,8 +227,8 @@ static void processJsonLine(const char* line) {
             linkSendLog("  '1' o 'leer'     -> Leer cedula oficial (Ana - Mayor 18)");
             linkSendLog("  '2' o 'alterada' -> Probar cedula manipulada (Firma falsa 02)");
             linkSendLog("  '3' o 'vencida'  -> Probar cedula vencida (04)");
-            linkSendLog("  'a' / 'r'        -> Aceptar / rechazar la solicitud");
-            linkSendLog("  Tarjeta fisica: con hora, 'a' y apoyarla antes de 10 s");
+            linkSendLog("  'a' / 'r'        -> Responder por el ciudadano a una lectura aprobada");
+            linkSendLog("  Tarjeta fisica: con hora, apoyarla; si da 01, responder con 'a' o 'r'");
             linkSendLog("  'scan'           -> Probar el lector y ver que tiene la tarjeta (sin hora ni 'a')");
             return;
         }

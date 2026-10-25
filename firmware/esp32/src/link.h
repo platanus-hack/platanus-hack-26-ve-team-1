@@ -34,7 +34,12 @@ void linkSendWritten(bool ok);
 void linkSendLink(const String& handleHex);
 void linkSendLog(const String& mensaje);
 
+// Modo verificar: lectura aprobada que necesita la autorización del ciudadano. El
+// gateway la pide por WhatsApp y responde {"t":"consent","approved":…}
+void linkSendPedido(const String& handleHex, uint8_t atributo);
+
 // Envío a la pantalla de comercio del Arduino UNO (Serial1 en GPIO 25)
 void linkSendUnoResult(const char* resCode, uint8_t atributo, bool emergencia = false);
+void linkSendUnoWait(uint8_t atributo);   // Esperando la respuesta del ciudadano
 void linkSendUnoLock();
 void linkSendUnoIdle();
