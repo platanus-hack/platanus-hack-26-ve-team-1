@@ -13,7 +13,7 @@ Un prototipo de cédula electrónica que **guarda más datos pero muestra menos*
 ## Cinco piezas
 
 1. **La cédula:** tarjeta NFC MIFARE 1K con atributos firmados (ECDSA P-256) y sectores protegidos por rol.
-2. **El terminal:** ESP32 + lector RC522, pantalla Nextion para el ciudadano, pantalla del comercio (UNO) que solo recibe códigos y voz en español. Verifica la firma **sin internet**.
+2. **El terminal:** ESP32 + lector RC522, pantalla del comercio (UNO) que solo recibe códigos y voz en español. Verifica la firma **sin internet**.
 3. **El guardián:** un PIC bloquea el lector por hardware si abren la carcasa o el firmware deja de latir.
 4. **La billetera y el verificador:** PWA instalables; QR dinámico firmado por el celular, verificable sin red.
 5. **La nube:** API en Go y Postgres en Render, historial en vivo, paneles del emisor y el comercio, y avisos por WhatsApp con Kapso.
@@ -37,7 +37,7 @@ Un prototipo de cédula electrónica que **guarda más datos pero muestra menos*
 
 | Capa | Tecnología |
 |---|---|
-| Firmware | ESP32, PlatformIO, MFRC522, micro-ecc, ArduinoJson, Nextion |
+| Firmware | ESP32, PlatformIO, MFRC522, micro-ecc, ArduinoJson |
 | Guardián | PIC16F13145, MPLAB X, CLB |
 | Gateway | Node.js (serial, cola SQLite, audio) |
 | API | Go, chi, pgx, JWT, bcrypt, Server-Sent Events |
