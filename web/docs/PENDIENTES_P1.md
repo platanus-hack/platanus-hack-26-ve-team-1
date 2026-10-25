@@ -59,7 +59,7 @@ Ya están en el contrato: `POST /api/auth/register`, `POST /api/auth/login` (amb
   | 3 | Cédula revocada |
   | 4 | Cédula vencida |
   | 5 | Sin permiso para ese dato |
-  | 6 | Rechazado por ti |
+  | 6 | No compartiste |
 
 - `atributo`: `"A1"`–`"A6"` (el frontend también acepta 1–6).
 

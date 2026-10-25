@@ -4,7 +4,7 @@ import type { EventAttribute, EventItem, EventResult } from '../api/types'
 /**
  * Códigos de resultado del backend (1–6):
  * 1 Aprobado · 2 Firma inválida · 3 Cédula revocada · 4 Cédula vencida ·
- * 5 Sin permiso para ese dato · 6 Rechazado por ti.
+ * 5 Sin permiso para ese dato · 6 No compartiste (rechazo o sin respuesta).
  * La emergencia no es un código: llega aparte como `emergencia: true`.
  */
 export const RESULT_INFO: Record<EventResult, { label: string; variant: BadgeVariant }> = {
@@ -13,7 +13,7 @@ export const RESULT_INFO: Record<EventResult, { label: string; variant: BadgeVar
   3: { label: 'Cédula revocada', variant: 'error' },
   4: { label: 'Cédula vencida', variant: 'warning' },
   5: { label: 'Sin permiso para ese dato', variant: 'warning' },
-  6: { label: 'Rechazado por ti', variant: 'neutral' },
+  6: { label: 'No compartiste', variant: 'neutral' },
 }
 
 const UNKNOWN_RESULT = { label: 'Desconocido', variant: 'neutral' } as const

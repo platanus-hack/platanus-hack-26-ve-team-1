@@ -101,7 +101,7 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 
 - [ ] Todo lo de [`consentimiento-whatsapp.md`](consentimiento-whatsapp.md): migración, `POST /api/consent`, `GET /api/consent/{id}`, webhook, mensaje y pruebas.
 - [ ] Evitar el aviso duplicado tras un consentimiento (sección 4.5 de esa guía).
-- [ ] La tarea de retención (`cmd/retention`) también debe borrar `consent_requests` viejas.
+- [x] La tarea de retención (`cmd/retention`) también borra `consent_requests` viejas.
 - [ ] Render: aplicar la migración 000007, revisar `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID` y `KAPSO_WEBHOOK_SECRET`, y el webhook de Kapso apuntando a `https://<api>/api/webhooks/kapso`.
 - [ ] `admin demo` con los teléfonos reales del equipo (`-ana`, `-luis`, `-maria`).
 - [ ] Enviar un WhatsApp de prueba a cada teléfono de demo.
@@ -115,7 +115,7 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 
 ## 6. Web y PWA (Isabella y Samuel)
 
-- [ ] Historial del portal: un `06` por rechazo en WhatsApp debe leerse bien ("No compartiste…").
+- [x] Historial del portal: un `06` se lee "No compartiste".
 - [ ] Opcional: mostrar en vivo, en el historial, la solicitud pendiente.
 - [ ] Verificador en modo avión valida el QR de Ana.
 
