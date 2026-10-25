@@ -67,12 +67,16 @@ struct NfcDiagnostico {
     uint8_t sak;
     const __FlashStringHelper* tipo;   // nombre del tipo según el SAK
     bool clasica;                      // MIFARE Classic: tiene sectores con clave
-    NfcClaveSector sector[15];         // índices 1..14
-    bool indiceLeido;                  // se pudo leer el bloque 4 (índice)
-    uint8_t bloque4[16];
+    uint8_t sectores;                  // sectores probados: 5 en una Mini, 16 en el resto
+    NfcClaveSector sector[16];
+    bool leido[16];                    // se leyeron los 3 bloques de datos del sector
+    uint8_t datos[16][48];             // bloques de datos de cada sector, sin el trailer
 };
 
-// Busca una tarjeta, también las dormidas por un PICC_HaltA anterior, y prueba en los
-// sectores 1..14 la clave de fábrica y la de su rol. Solo lee el índice (bloque 4).
+// Busca una tarjeta, también las dormidas por un PICC_HaltA anterior, y prueba en cada
+// sector la clave de fábrica y la de su rol. Lee los bloques de datos de los que abren.
 // false = no hay tarjeta en el campo
 bool nfcDiagnose(NfcDiagnostico& d);
+
+// Sector inicial del registro de un atributo (Sección 4.2); 0 = atributo desconocido
+uint8_t getSectorForAttribute(uint8_t atributo);

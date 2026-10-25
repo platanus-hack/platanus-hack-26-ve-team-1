@@ -222,7 +222,7 @@ static void processJsonLine(const char* line) {
             linkSendLog("  '3' o 'vencida'  -> Probar cedula vencida (04)");
             linkSendLog("  'a' / 'r'        -> Aceptar / rechazar la solicitud, como en la Nextion");
             linkSendLog("  Tarjeta fisica: con hora, 'a' y apoyarla antes de 10 s");
-            linkSendLog("  'scan'           -> Probar el lector: UID, tipo y claves (sin hora ni 'a')");
+            linkSendLog("  'scan'           -> Probar el lector y ver que tiene la tarjeta (sin hora ni 'a')");
             linkSendLog("  'dim=10'/100     -> Probar pantalla Nextion");
             return;
         }

@@ -102,8 +102,7 @@ static bool leerBloque(uint8_t bloque, uint8_t* out16) {
     return true;
 }
 
-// Determina el sector inicial según el atributo (Sección 4.2); 0 = atributo desconocido
-static uint8_t getSectorForAttribute(uint8_t atributo) {
+uint8_t getSectorForAttribute(uint8_t atributo) {
     switch (atributo) {
         case ATTR_A1_MAYOR_18:  return 2;  // Sectores 2 y 3
         case ATTR_A2_MAYOR_21:  return 4;  // Sectores 4 y 5
@@ -254,19 +253,27 @@ bool nfcDiagnose(NfcDiagnostico& d) {
     d.tipo = MFRC522::PICC_GetTypeName(tipo);
     d.clasica = tipo == MFRC522::PICC_TYPE_MIFARE_MINI || tipo == MFRC522::PICC_TYPE_MIFARE_1K ||
                 tipo == MFRC522::PICC_TYPE_MIFARE_4K;
+    // En una 4K solo se miran los 16 primeros sectores, los mismos que usa la cédula
+    d.sectores = (tipo == MFRC522::PICC_TYPE_MIFARE_MINI) ? 5 : 16;
 
-    for (uint8_t s = 1; s <= 14 && d.clasica; s++) {
+    for (uint8_t s = 0; s < d.sectores && d.clasica; s++) {
+        // Los sectores 0 y 15 no son de la cédula: solo se prueba la clave de fábrica
+        const uint8_t* claveRol = getKeyAForSector(s);
         if (autenticar(s, KEY_DEFAULT, false)) {
             d.sector[s] = SECTOR_FABRICA;
-        } else if (reactivarTarjeta() && autenticar(s, getKeyAForSector(s), false)) {
+        } else if (claveRol != nullptr && reactivarTarjeta() && autenticar(s, claveRol, false)) {
             d.sector[s] = SECTOR_ROL;
         } else {
             d.sector[s] = SECTOR_NO_ABRE;
             if (!reactivarTarjeta()) break; // Se retiró: el resto queda sin probar
+            continue;
         }
-        if (s == 1 && d.sector[1] != SECTOR_NO_ABRE) {
-            d.indiceLeido = leerBloque(4, d.bloque4);
+        d.leido[s] = true;
+        for (uint8_t b = 0; b < 3 && d.leido[s]; b++) {
+            d.leido[s] = leerBloque(s * 4 + b, d.datos[s] + b * 16);
         }
+        // Una lectura negada por los bits de acceso también deja la tarjeta sin responder
+        if (!d.leido[s] && !reactivarTarjeta()) break;
     }
 
     nfcFinishCard();
