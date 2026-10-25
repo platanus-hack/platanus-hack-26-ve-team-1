@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P4 · laboratorio de riesgos</title>
+<style>
+  body{font:16px system-ui,sans-serif;margin:0;padding:16px;max-width:520px;margin-inline:auto;background:#fff;color:#111}
+  h1{font-size:20px} h2{font-size:16px;margin:24px 0 8px}
+  button{font:inherit;padding:10px 14px;margin:4px 4px 4px 0;border-radius:8px;border:1px solid #888;background:#f3f3f3}
+  pre{background:#f3f3f3;padding:8px;border-radius:8px;white-space:pre-wrap;word-break:break-all;font-size:13px}
+  #qr svg,#qr img{width:100%;height:auto;max-width:320px;display:block}
+  video{width:100%;border-radius:8px;background:#000}
+  .ok{color:#0a7d2c}.bad{color:#b00020}
+</style>
+</head>
+<body>
+<h1>P4 · laboratorio de riesgos</h1>
+<p>Prueba en iPhone <b>y</b> Android (HTTPS). Instalada o en Safari/Chrome.</p>
+
+<h2>1. Llave P-256 no extraíble</h2>
+<button id="key">Crear o cargar llave</button>
+<pre id="keyOut">—</pre>
+<p>Cierra y reabre la pestaña o la app: el id debe ser el mismo.</p>
+
+<h2>2. QR firmado (~250 caracteres, como SLJ1)</h2>
+<button id="gen">Generar QR (se renueva cada 20 s)</button>
+<div id="qr"></div>
+<pre id="qrOut">—</pre>
+
+<h2>3. Escáner</h2>
+<button id="scan">Abrir cámara</button><button id="stop">Detener</button>
+<video id="v" playsinline muted hidden></video>
+<pre id="scanOut">—</pre>
+<p id="engine"></p>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const b64u = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+// ---- IndexedDB ----
+const idb = () => new Promise((res, rej) => { const r = indexedDB.open('slj-lab', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const kv = async (mode, f) => { const db = await idb(); return new Promise((res, rej) => { const r = f(db.transaction('kv', mode).objectStore('kv')); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); };
+
+let pair = null;
+async function getKey() {
+  pair = await kv('readonly', s => s.get('pair'));
+  let fresh = false;
+  if (!pair) {
+    pair = await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'}, false, ['sign','verify']);
+    await kv('readwrite', s => s.put(pair, 'pair'));
+    fresh = true;
+  }
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+  let extractable = true;
+  try { await crypto.subtle.exportKey('raw', pair.privateKey); } catch { extractable = false; }
+  const persisted = navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : 'n/d';
+  return { fresh, id: b64u(raw).slice(0, 12), privExtractable: extractable, persistent: persisted };
+}
+$('key').onclick = async () => {
+  try {
+    const r = await getKey();
+    $('keyOut').innerHTML = `id: ${r.id}\n` + (r.fresh ? 'creada ahora' : 'cargada de IndexedDB (persiste)') +
+      `\nprivada extraíble: <span class="${r.privExtractable ? 'bad' : 'ok'}">${r.privExtractable}</span>\nalmacenamiento persistente: ${r.persistent}`;
+  } catch (e) { $('keyOut').textContent = 'ERROR: ' + e; }
+};
+
+// ---- QR ----
+let timer = null;
+async function renderQr() {
+  if (!pair) await getKey();
+  const t = Math.floor(Date.now() / 1000);
+  const body = new Uint8Array(100 + 64 + 4 + 1); // tamaño de una credencial + firma, relleno aleatorio
+  crypto.getRandomValues(body);
+  const sig = new Uint8Array(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'}, pair.privateKey, body));
+  const payload = 'SLJ1:' + b64u(new Uint8Array([...body.slice(0, 120), ...sig]));
+  const q = qrcode(0, 'M'); q.addData(payload); q.make();
+  $('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
+  $('qrOut').textContent = `t=${t}\n${payload.length} caracteres, QR v${q.getModuleCount() ? (q.getModuleCount() - 17) / 4 : '?'}\n${payload}`;
+}
+$('gen').onclick = () => { clearInterval(timer); renderQr(); timer = setInterval(renderQr, 20000); };
+
+// ---- Escáner ----
+let stream = null, running = false;
+$('engine').textContent = 'Motor: ' + ('BarcodeDetector' in window ? 'BarcodeDetector nativo' : 'jsQR (respaldo)');
+$('stop').onclick = () => { running = false; if (stream) stream.getTracks().forEach(t => t.stop()); $('v').hidden = true; };
+$('scan').onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (e) { $('scanOut').textContent = 'Cámara denegada o no disponible: ' + e; return; }
+  const v = $('v'); v.srcObject = stream; v.hidden = false; await v.play();
+  const det = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+  const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+  running = true;
+  const t0 = performance.now();
+  const loop = async () => {
+    if (!running) return;
+    let text = null;
+    try {
+      if (det) { const r = await det.detect(v); if (r.length) text = r[0].rawValue; }
+      else if (v.videoWidth) {
+        const s = 640 / Math.max(v.videoWidth, v.videoHeight), w = Math.round(v.videoWidth * s), h = Math.round(v.videoHeight * s);
+        cv.width = w; cv.height = h; ctx.drawImage(v, 0, 0, w, h);
+        const r = jsQR(ctx.getImageData(0, 0, w, h).data, w, h); if (r) text = r.data;
+      }
+    } catch {}
+    if (text) {
+      $('scanOut').innerHTML = `<span class="ok">leído en ${Math.round(performance.now() - t0)} ms</span>\n${text.length} caracteres\n${text}`;
+      $('stop').click(); return;
+    }
+    setTimeout(loop, 100);
+  };
+  loop();
+};
+</script>
+</body>
+</html>

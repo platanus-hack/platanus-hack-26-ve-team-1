@@ -1,0 +1,29 @@
+{
+  "aviso": "SOLO PRUEBA: esta clave privada es pública en el repo; no usarla fuera de pruebas.",
+  "credentials": [
+    {
+      "attribute": 1,
+      "issuer": "nacional",
+      "blob_hex": "010101016cbe09819e429475799fc8ed01027d18a5a803667332834277132e4c1d21452d89a282f7d9dd3792c2a2d95bca86d8c4ab9c8b3fae63d7fc2b7ace45769a7f9ef0bdcad7b39e7fca88d292102bf0bbb1eaff92e2c8721832bc9cd07f2eb04a817a5f4551b85732796a5f01ab4c1d",
+      "message_hex": "010101016cbe09819e429475799fc8ed01027d18a5a803667332834277132e4c1d21452d89a282f7d9dd3792c2a2d95bca86",
+      "sig_hex": "d8c4ab9c8b3fae63d7fc2b7ace45769a7f9ef0bdcad7b39e7fca88d292102bf0bbb1eaff92e2c8721832bc9cd07f2eb04a817a5f4551b85732796a5f01ab4c1d"
+    },
+    {
+      "attribute": 2,
+      "issuer": "nacional",
+      "blob_hex": "010102016cbe09819e429475799fc8ed01027d18a5a803667332834277132e4c1d21452d89a282f7d9dd3792c2a2d95bca8683b5324cc1b7546c1f8b852bad63f17b7698beee48266d8d3e44adeefb27ef2933f18659b4082e35f82dcb097c644bcda32584939df3ce364e0954d4ad9fae84",
+      "message_hex": "010102016cbe09819e429475799fc8ed01027d18a5a803667332834277132e4c1d21452d89a282f7d9dd3792c2a2d95bca86",
+      "sig_hex": "83b5324cc1b7546c1f8b852bad63f17b7698beee48266d8d3e44adeefb27ef2933f18659b4082e35f82dcb097c644bcda32584939df3ce364e0954d4ad9fae84"
+    }
+  ],
+  "handle_hex": "9e429475799fc8ed",
+  "phone_private_jwk": {
+    "SOLO PRUEBA": "true",
+    "crv": "P-256",
+    "d": "YXPWwaMgcYW4YkfESi8vZ1RSqn8fI-QYpsV0l5FICUQ",
+    "kty": "EC",
+    "x": "fRilqANmczKDQncTLkwdIUUtiaKC99ndN5LCotlbyoY",
+    "y": "0S7WQV2QQAMZ0Nh-M1QOw9QJHW5pOtroH6_IwkBnzDI"
+  },
+  "phone_pub_hex": "027d18a5a803667332834277132e4c1d21452d89a282f7d9dd3792c2a2d95bca86"
+}

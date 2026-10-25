@@ -34,8 +34,8 @@ function App() {
                   </Route>
                   <Route element={<ProtectedRoute roles={[ROLES.COMERCIO]} />}>
                     <Route path="comercio" element={<MerchantPage />} />
+                    <Route path="verificar" element={<VerifyPage />} />
                   </Route>
-                  <Route path="verificar" element={<VerifyPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>
               </Route>

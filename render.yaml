@@ -1,4 +1,20 @@
+# Blueprint de Render.
+# slj-p4-lab: laboratorio de P4 (HTTPS para probar llave no extraíble, QR y cámara en iPhone y Android).
+# slj-api y slj-web: backend en Go y front. Los servicios reales se crearon a mano en el dashboard.
 services:
+  - type: web
+    runtime: static
+    name: slj-p4-lab
+    buildCommand: echo "sin build"
+    staticPublishPath: app/public/p4-lab
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+
   - type: web
     name: slj-api
     runtime: go
@@ -19,6 +35,8 @@ services:
         sync: false
       - key: KAPSO_WEBHOOK_SECRET
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
       - key: JWT_SECRET
         generateValue: true
 
@@ -28,10 +46,10 @@ services:
     rootDir: web
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://hackathonplatanusvenezuela2026.onrender.com
     routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://hackathonplatanusvenezuela2026.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html

@@ -25,6 +25,8 @@ type RequestOptions = {
   body?: unknown
   /** Desactívalo en endpoints donde un 401 es una respuesta esperada (p. ej. login). */
   signalUnauthorized?: boolean
+  /** Cabeceras extra, p. ej. `Authorization: Bearer <token>` del terminal en POST /events. */
+  headers?: Record<string, string>
 }
 
 const DEFAULT_MESSAGES: Record<number, string> = {
@@ -54,7 +56,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 
 export async function request<T>(
   path: string,
-  { method = 'GET', body, signalUnauthorized = true }: RequestOptions = {},
+  { method = 'GET', body, signalUnauthorized = true, headers }: RequestOptions = {},
 ): Promise<T> {
   let response: Response
   try {
@@ -64,6 +66,7 @@ export async function request<T>(
       headers: {
         Accept: 'application/json',
         ...(body !== undefined && { 'Content-Type': 'application/json' }),
+        ...headers,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
