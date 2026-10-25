@@ -30,6 +30,8 @@ La clave A de cada sector decide qué rol lo lee; la clave B (solo el emisor) pe
 | Information disclosure | Terminal pide más datos de los que debe | Claves por sector, `05`, aviso "no se compartió nada" | Sin fuga |
 | Information disclosure | Un ciudadano consulta datos de otro | Todas las consultas filtran por la sesión; pruebas con dos cuentas | 403/vacío |
 | Information disclosure | Rastreo por el servidor | Handle seudónimo, retención 30 días; E2E cifrado en la hoja de ruta | Riesgo residual declarado |
+| Spoofing | Responder el consentimiento de otra persona | La respuesta solo cuenta si viene del teléfono registrado de la solicitud; la primera respuesta gana; vence a los 60 s | Se ignora |
+| Information disclosure | Consultar solicitudes de otro comercio | `GET /api/consent/{id}` filtra por el terminal autenticado | 404 |
 | Denial of service | Webhook falso de Kapso | Firma HMAC-SHA256 e idempotencia | 401 |
 | Elevation of privilege | Token de terminal robado | Solo hashes en la base; revocable borrando el terminal | Acceso limitado a `events` y config |
 | Elevation of privilege | CSRF desde otro origen | `CORS_ORIGINS` exacto, rechazo 403 de mutaciones foráneas, cookie `SameSite` | Bloqueado |
