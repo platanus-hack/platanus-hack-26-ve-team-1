@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,62 +19,23 @@ import (
 // Tiempo que una solicitud de emisión espera a que llegue una tarjeta virgen.
 const requestTTL = 10 * time.Minute
 
+// putProfile: PUT /api/citizens/{id}/profile. Con {fechaNacimiento, cedula} completa el perfil del ciudadano
+// (nombre de la cuenta + V-cédula como identidad); también acepta el perfil completo en la forma de Profile.
 func (s *Server) putProfile(w http.ResponseWriter, r *http.Request) {
 	id, ok := atoi(chi.URLParam(r, "id"))
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "id inválido")
 		return
 	}
-	var p Profile
-	if !readJSON(w, r, &p) {
+	var body map[string]json.RawMessage
+	if !readJSON(w, r, &body) {
 		return
 	}
-	attrs, err := p.Attributes(s.now())
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	raw, _ := json.Marshal(p)
-	// Lo que el ciudadano declaró por su cuenta (optional) se conserva si el emisor no lo envía.
-	tag, err := s.DB.Exec(r.Context(),
-		`UPDATE citizens SET profile = CASE
-		     WHEN profile ? 'optional' AND NOT ($1::jsonb ? 'optional') THEN $1::jsonb || jsonb_build_object('optional', profile->'optional')
-		     ELSE $1::jsonb END
-		  WHERE id = $2 AND role = 'ciudadano'`, string(raw), id)
-	if err != nil {
-		serverErr(w, err)
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		writeErr(w, http.StatusNotFound, "ciudadano no encontrado")
-		return
-	}
-	codes := []string{}
-	for _, a := range attrs {
-		codes = append(codes, attrLabel(int(a.Code)))
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "attributes": codes})
-}
-
-// emisionRequest deja pendiente la emisión para el próximo UID que llegue de un terminal de registro.
-// Con terminalId (o terminal_id) la orden queda dirigida a ese terminal, que pasa a modo emitir.
-func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CitizenID   int64 `json:"citizen_id"`
-		CiudadanoID int64 `json:"ciudadanoId"`
-		TerminalID  int64 `json:"terminalId"`
-		TerminalID2 int64 `json:"terminal_id"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	citizenID := firstNonZero(in.CiudadanoID, in.CitizenID)
-	terminalID := firstNonZero(in.TerminalID, in.TerminalID2)
-	ctx := r.Context()
+	var name string
 	var raw []byte
-	err := s.DB.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, citizenID).Scan(&raw)
+	err := s.DB.QueryRow(r.Context(), `SELECT name, profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, id).Scan(&name, &raw)
 	if errors.Is(err, pgx.ErrNoRows) {
-		writeErr(w, http.StatusNotFound, "ciudadano no encontrado")
+		writeErr(w, http.StatusNotFound, "Ciudadano no encontrado.")
 		return
 	}
 	if err != nil {
@@ -82,8 +44,92 @@ func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	var p Profile
 	_ = json.Unmarshal(raw, &p)
+
+	if _, simple := body["fechaNacimiento"]; simple || body["cedula"] != nil {
+		var in struct {
+			FechaNacimiento string `json:"fechaNacimiento"`
+			Cedula          string `json:"cedula"`
+		}
+		b, _ := json.Marshal(body)
+		_ = json.Unmarshal(b, &in)
+		birth, err := time.Parse("2006-01-02", in.FechaNacimiento)
+		if err != nil || birth.After(s.now()) || birth.Year() < 1900 {
+			writeErr(w, http.StatusBadRequest, "La fecha de nacimiento debe tener el formato AAAA-MM-DD y no puede ser futura.")
+			return
+		}
+		digits := strings.TrimSpace(in.Cedula)
+		if len(digits) < 6 || len(digits) > 9 || digitsOnly(digits) != digits {
+			writeErr(w, http.StatusBadRequest, "La cédula debe tener entre 6 y 9 dígitos.")
+			return
+		}
+		p.Birthdate = in.FechaNacimiento
+		p.Identity = &struct {
+			Name       string `json:"name"`
+			ID         string `json:"id"`
+			ValidUntil string `json:"valid_until"`
+		}{strings.ToUpper(strings.TrimSpace(name)), "V-" + digits, s.now().AddDate(5, 0, 0).Format("2006-01-02")}
+	} else {
+		keep := p.Optional
+		p = Profile{}
+		b, _ := json.Marshal(body)
+		if err := json.Unmarshal(b, &p); err != nil {
+			writeErr(w, http.StatusBadRequest, "Perfil inválido.")
+			return
+		}
+		if p.Optional == nil {
+			p.Optional = keep // lo que declaró el ciudadano se conserva
+		}
+	}
+	attrs, err := p.Attributes(s.now())
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	out, _ := json.Marshal(p)
+	if _, err := s.DB.Exec(r.Context(), `UPDATE citizens SET profile = $1::jsonb WHERE id = $2`, string(out), id); err != nil {
+		serverErr(w, err)
+		return
+	}
+	codes := []string{}
+	for _, a := range attrs {
+		codes = append(codes, attrLabel(int(a.Code)))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "perfilCompleto": p.perfilCompleto(), "attributes": codes})
+}
+
+// emisionRequest deja pendiente la emisión para el próximo UID que llegue de un terminal de registro.
+// Con terminalId (o terminal_id) la orden queda dirigida a ese terminal, que pasa a modo emitir.
+func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		CitizenID   flexInt `json:"citizen_id"`
+		CiudadanoID flexInt `json:"ciudadanoId"`
+		TerminalID  flexInt `json:"terminalId"`
+		TerminalID2 flexInt `json:"terminal_id"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	citizenID := firstNonZero(int64(in.CiudadanoID), int64(in.CitizenID))
+	terminalID := firstNonZero(int64(in.TerminalID), int64(in.TerminalID2))
+	ctx := r.Context()
+	var raw []byte
+	err := s.DB.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, citizenID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "Ciudadano no encontrado.")
+		return
+	}
+	if err != nil {
+		serverErr(w, err)
+		return
+	}
+	var p Profile
+	_ = json.Unmarshal(raw, &p)
+	if !p.perfilCompleto() {
+		writeErr(w, http.StatusConflict, "Falta completar el perfil del ciudadano (fecha de nacimiento y cédula).")
+		return
+	}
 	if attrs, err := p.Attributes(s.now()); err != nil || len(attrs) == 0 {
-		writeErr(w, http.StatusUnprocessableEntity, "el ciudadano no tiene datos para emitir atributos")
+		writeErr(w, http.StatusUnprocessableEntity, "El ciudadano no tiene datos para emitir atributos.")
 		return
 	}
 	var term *int64
@@ -107,6 +153,14 @@ func (s *Server) emisionRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		term = &terminalID
+	} else {
+		// Sin terminal elegido, lo atiende cualquier terminal de registro en modo emitir; si ninguno lo está, se activa.
+		if _, err := s.DB.Exec(ctx,
+			`UPDATE terminals SET modo = 'emitir' WHERE role = 'registro'
+			   AND NOT EXISTS (SELECT 1 FROM terminals WHERE role = 'registro' AND modo = 'emitir')`); err != nil {
+			serverErr(w, err)
+			return
+		}
 	}
 	var id int64
 	err = s.DB.QueryRow(ctx,

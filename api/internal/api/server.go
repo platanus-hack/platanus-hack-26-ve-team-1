@@ -24,6 +24,8 @@ type Server struct {
 	ValidDays int // vigencia de lo que se firma
 	Now       func() time.Time
 
+	AllowedOrigins []string // orígenes del front permitidos con credenciales (CORS_ORIGINS)
+
 	Notifier      Notifier // nil: no se envían avisos de WhatsApp
 	WebhookSecret string   // secreto del webhook de Kapso
 

@@ -104,9 +104,9 @@ func TestIntegration(t *testing.T) {
 	// Cuentas: Ana y Luis (registro), un emisor (insertado directo).
 	ana, luis, emisor := newClient(), newClient(), newClient()
 	a := call(ana, "POST", "/api/auth/register", "", map[string]any{"email": tag + "-ana@test.dev", "password": "clave-segura-1", "name": "Ana"}, 201)
-	anaID := int64(a["user"].(map[string]any)["id"].(float64))
+	anaID, _ := atoi(a["user"].(map[string]any)["id"].(string))
 	l := call(luis, "POST", "/api/auth/register", "", map[string]any{"email": tag + "-luis@test.dev", "password": "clave-segura-2", "name": "Luis"}, 201)
-	luisID := int64(l["user"].(map[string]any)["id"].(float64))
+	luisID, _ := atoi(l["user"].(map[string]any)["id"].(string))
 	hash, _ := bcrypt.GenerateFromPassword([]byte("clave-emisor-1"), bcrypt.MinCost)
 	var emisorID int64
 	db.QueryRow(ctx, `INSERT INTO citizens (email, password_hash, role, name) VALUES ($1,$2,'emisor','Emisor') RETURNING id`,
@@ -280,10 +280,8 @@ func TestIntegration(t *testing.T) {
 
 	// Carnet: renovar lo pide el emisor; un ciudadano no puede.
 	call(ana, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": anaID}, 403)
-	call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": luisID}, 422) // sin datos de carnet
-	if n := call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": anaID}, 200)["dispositivos"]; n != float64(1) {
-		t.Fatalf("dispositivos: %v", n)
-	}
+	call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": luisID}, 422) // sin perfil
+	call(emisor, "POST", "/api/carnet/issue", "", map[string]any{"citizen_id": anaID}, 409)  // ya lo recibió al vincular
 	if n := len(call(ana, "GET", "/api/wallet", "", nil, 200)["credentials"].([]any)); n != 3 {
 		t.Fatalf("la renovación duplicó credenciales: %d", n)
 	}
@@ -292,7 +290,7 @@ func TestIntegration(t *testing.T) {
 	call(ana, "GET", "/api/terminals", "", nil, 403)
 	var shopID int64
 	db.QueryRow(ctx, `SELECT id FROM terminals WHERE name = $1`, tag+"comercio").Scan(&shopID)
-	call(emisor, "PATCH", fmt.Sprintf("/api/terminals/%d", shopID), "", map[string]any{"modo": "emergencia", "a": "A4"}, 200)
+	call(emisor, "PATCH", fmt.Sprintf("/api/terminals/%d", shopID), "", map[string]any{"rol": "emergencia", "atributos": []string{"sangre_alergias"}, "modo": "emergencia"}, 200)
 	cfg2 := call(newClient(), "GET", "/api/terminal/config", shop, nil, 200)
 	if cfg2["modo"] != "emergencia" || cfg2["a"] != "A4" {
 		t.Fatalf("config tras PATCH: %v", cfg2)

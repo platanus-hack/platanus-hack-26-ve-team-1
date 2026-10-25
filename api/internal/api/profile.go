@@ -55,7 +55,7 @@ type OptionalData struct {
 func (o *OptionalData) derived() (blood, contact, donorLicense string) {
 	blood = strings.TrimSpace(strings.TrimSpace(o.Sangre) + " " + strings.TrimSpace(o.Alergias))
 	if c := o.Contacto; c != nil && (strings.TrimSpace(c.Nombre) != "" || strings.TrimSpace(c.Telefono) != "") {
-		contact = strings.TrimSpace(strings.TrimSpace(c.Nombre) + " " + strings.TrimSpace(c.Telefono))
+		contact = strings.TrimSpace(strings.TrimSpace(c.Nombre) + " " + chipPhone(c.Telefono))
 	}
 	if lic := strings.TrimSpace(o.Licencia); o.Donante || lic != "" {
 		d := "N"
@@ -132,4 +132,24 @@ func (p Profile) CarnetValue() ([]byte, bool, error) {
 		return nil, false, errors.New("el valor del carnet excede 64 bytes")
 	}
 	return v, true, nil
+}
+
+func digitsOnly(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// chipPhone da el teléfono como se escribe en el chip: un número venezolano +58 414... pasa a 0414...
+// (11 dígitos) para dejar más bytes al nombre; los demás van en dígitos.
+func chipPhone(s string) string {
+	d := digitsOnly(s)
+	if strings.HasPrefix(d, "58") && len(d) == 12 {
+		return "0" + d[2:]
+	}
+	return d
 }

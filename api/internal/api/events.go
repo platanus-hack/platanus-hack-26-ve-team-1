@@ -46,13 +46,17 @@ func (s *Server) revocations(w http.ResponseWriter, r *http.Request) {
 // las activas de la cuenta (el emisor indica {ciudadanoId}). Lo puede pedir un emisor o el dueño.
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		H           string `json:"h"`
-		CiudadanoID int64  `json:"ciudadanoId"`
+		H           string  `json:"h"`
+		CiudadanoID flexInt `json:"ciudadanoId"`
 	}
 	if !readOptionalJSON(w, r, &in) {
 		return
 	}
 	u := userFrom(r.Context())
+	if in.CiudadanoID != 0 && u.Role != "emisor" {
+		writeErr(w, http.StatusForbidden, "Solo un emisor puede revocar la cédula de otra persona.")
+		return
+	}
 	if in.H != "" {
 		handle, err := parseHandle(in.H)
 		if err != nil {
@@ -71,7 +75,7 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	target, ok := s.targetCitizen(w, u, in.CiudadanoID)
+	target, ok := s.targetCitizen(w, u, int64(in.CiudadanoID))
 	if !ok {
 		return
 	}

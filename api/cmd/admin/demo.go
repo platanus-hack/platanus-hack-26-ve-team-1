@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,10 +61,10 @@ var demoUsers = []demoUser{
 }
 
 var demoTerminals = []demoTerminal{
-	{"Registro", "registro", "", "emitir", ""},
+	{"Registro", "registro", "A3", "emitir", ""},
 	{"Bar La Esquina", "comercio", "A1", "verificar", "comercio@sisa.demo"},
-	{"Clinica Salud", "salud", "A4", "verificar", ""},
-	{"Ambulancia 1", "emergencia", "", "emergencia", ""},
+	{"Clinica Salud", "salud", "A4,A5,A6", "verificar", ""},
+	{"Ambulancia 1", "emergencia", "A4,A5", "emergencia", ""},
 	{"Transito", "transito", "A6", "verificar", ""},
 }
 
@@ -142,8 +143,10 @@ func demo(ctx context.Context, db *pgxpool.Pool, args []string) {
 	var termIDs []int64
 	for _, t := range demoTerminals {
 		attr := []int16{}
-		if t.attr != "" {
-			attr = []int16{int16(t.attr[1] - '0')}
+		for _, a := range strings.Split(t.attr, ",") {
+			if len(a) == 2 {
+				attr = append(attr, int16(a[1]-'0'))
+			}
 		}
 		var owner *int64
 		if t.owner != "" {

@@ -54,11 +54,14 @@ func main() {
 			log.Fatal("falta -name")
 		}
 		a := []int16{}
-		if *attr != "" {
-			if len(*attr) != 2 || (*attr)[0] != 'A' || (*attr)[1] < '1' || (*attr)[1] > '6' {
-				log.Fatal("-attr debe ser A1..A6")
+		for _, x := range strings.Split(*attr, ",") {
+			if x == "" {
+				continue
 			}
-			a = []int16{int16((*attr)[1] - '0')}
+			if len(x) != 2 || x[0] != 'A' || x[1] < '1' || x[1] > '6' {
+				log.Fatal("-attr debe ser A1..A6 (varios separados por coma)")
+			}
+			a = append(a, int16(x[1]-'0'))
 		}
 		raw := make([]byte, 32)
 		rand.Read(raw)

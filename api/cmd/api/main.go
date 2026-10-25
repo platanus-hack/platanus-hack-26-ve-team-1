@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,8 +21,14 @@ import (
 )
 
 func main() {
+	var origins []string
+	for _, o := range strings.Split(os.Getenv("CORS_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			origins = append(origins, o)
+		}
+	}
 	r := chi.NewRouter()
-	r.Use(middleware.Logger, middleware.Recoverer)
+	r.Use(middleware.Logger, middleware.Recoverer, api.CORS(origins))
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok"))
@@ -58,7 +65,7 @@ func main() {
 			issuers[code] = k
 		}
 		srv := &api.Server{DB: db, JWTSecret: []byte(secret), Issuers: issuers, ValidDays: 365,
-			WebhookSecret: os.Getenv("KAPSO_WEBHOOK_SECRET")}
+			WebhookSecret: os.Getenv("KAPSO_WEBHOOK_SECRET"), AllowedOrigins: origins}
 		if key, id := os.Getenv("KAPSO_API_KEY"), os.Getenv("KAPSO_PHONE_NUMBER_ID"); key != "" && id != "" {
 			srv.Notifier = kapso.New(key, id)
 		} else {

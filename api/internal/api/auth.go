@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/mail"
@@ -29,14 +31,32 @@ type User struct {
 	Notifications bool   `json:"avisosActivados"`
 }
 
+// userOut es la forma que lee el front: id como texto y telefono null si no hay.
+type userOut struct {
+	ID       string  `json:"id"`
+	Email    string  `json:"email"`
+	Nombre   string  `json:"nombre"`
+	Rol      string  `json:"rol"`
+	Telefono *string `json:"telefono"`
+	Avisos   bool    `json:"avisosActivados"`
+}
+
+func toOut(u User) userOut {
+	o := userOut{ID: itoa(u.ID), Email: u.Email, Nombre: u.Name, Rol: u.Role, Avisos: u.Notifications}
+	if u.Whatsapp != "" {
+		o.Telefono = &u.Whatsapp
+	}
+	return o
+}
+
 // userEnv devuelve los campos del usuario en la raíz y también dentro de "user".
 type userEnv struct {
 	OK bool `json:"ok"`
-	User
-	Nested User `json:"user"`
+	userOut
+	Nested userOut `json:"user"`
 }
 
-func envelope(u User) userEnv { return userEnv{OK: true, User: u, Nested: u} }
+func envelope(u User) userEnv { return userEnv{OK: true, userOut: toOut(u), Nested: toOut(u)} }
 
 // phoneOut da el teléfono guardado (solo dígitos) como +58...
 func phoneOut(digits string) string {
@@ -61,10 +81,14 @@ func (s *Server) setCookie(w http.ResponseWriter, r *http.Request, id int64) err
 	if err != nil {
 		return err
 	}
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	sameSite := http.SameSiteLaxMode
+	if secure && s.crossSite(r) {
+		sameSite = http.SameSiteNoneMode // front y API en sitios distintos: la cookie debe viajar entre ambos
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: tok, Path: "/", Expires: exp,
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		HttpOnly: true, SameSite: sameSite, Secure: secure,
 	})
 	return nil
 }
@@ -164,6 +188,12 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 // session valida la cookie y carga al usuario desde la base, así los cambios de rol aplican de inmediato.
 func (s *Server) session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Con la cookie viajando entre sitios, las peticiones que cambian datos deben venir del front permitido.
+		if len(s.AllowedOrigins) > 0 && r.Method != http.MethodGet && r.Method != http.MethodHead &&
+			r.Method != http.MethodOptions && !s.originAllowed(r) {
+			writeErr(w, http.StatusForbidden, "Origen no permitido.")
+			return
+		}
 		c, err := r.Cookie(cookieName)
 		if err != nil {
 			writeErr(w, http.StatusUnauthorized, "inicia sesión")
@@ -227,10 +257,10 @@ func (s *Server) patchMe(w http.ResponseWriter, r *http.Request) {
 }
 
 type notificationsIn struct {
-	Whatsapp      *string `json:"whatsapp"`
-	Telefono      *string `json:"telefono"`
-	Notifications *bool   `json:"notifications"`
-	Avisos        *bool   `json:"avisosActivados"`
+	Telefono      json.RawMessage `json:"telefono"`
+	Whatsapp      json.RawMessage `json:"whatsapp"`
+	Notifications *bool           `json:"notifications"`
+	Avisos        *bool           `json:"avisosActivados"`
 }
 
 // putNotifications: PUT /api/me/notifications {telefono, avisosActivados}.
@@ -243,24 +273,41 @@ func (s *Server) putNotifications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateNotifications(w http.ResponseWriter, r *http.Request, in notificationsIn) {
-	if in.Telefono != nil {
-		in.Whatsapp = in.Telefono
-	}
-	if in.Avisos != nil {
-		in.Notifications = in.Avisos
-	}
 	u := userFrom(r.Context())
 	u.Whatsapp = kapso.NormalizePhone(u.Whatsapp)
-	if in.Whatsapp != nil {
-		p := kapso.NormalizePhone(*in.Whatsapp)
-		if p != "" && (len(p) < 8 || len(p) > 15) {
-			writeErr(w, http.StatusBadRequest, "teléfono inválido")
-			return
-		}
-		u.Whatsapp = p
+	raw := in.Telefono
+	if len(raw) == 0 {
+		raw = in.Whatsapp
 	}
-	if in.Notifications != nil {
-		u.Notifications = *in.Notifications
+	touched := len(raw) > 0
+	if len(raw) > 0 {
+		if string(bytes.TrimSpace(raw)) == "null" {
+			u.Whatsapp = ""
+		} else {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				writeErr(w, http.StatusBadRequest, "El teléfono debe ser un texto, por ejemplo +584241234567.")
+				return
+			}
+			p := kapso.NormalizePhone(v)
+			if p != "" && (len(p) < 8 || len(p) > 15) {
+				writeErr(w, http.StatusBadRequest, "Teléfono inválido: usa el formato internacional, por ejemplo +584241234567.")
+				return
+			}
+			u.Whatsapp = p
+		}
+	}
+	avisos := in.Avisos
+	if avisos == nil {
+		avisos = in.Notifications
+	}
+	if avisos != nil {
+		u.Notifications = *avisos
+		touched = true
+	}
+	if touched && u.Notifications && u.Whatsapp == "" {
+		writeErr(w, http.StatusBadRequest, "Para activar los avisos necesitas un teléfono de WhatsApp.")
+		return
 	}
 	var phone *string
 	if u.Whatsapp != "" {

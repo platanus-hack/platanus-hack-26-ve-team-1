@@ -49,3 +49,38 @@ func readOptionalJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
+
+// flexInt lee un id que el front puede mandar como número o como texto ("17").
+type flexInt int64
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := string(bytes.Trim(bytes.TrimSpace(b), `"`))
+	if s == "" || s == "null" {
+		*f = 0
+		return nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*f = flexInt(n)
+	return nil
+}
+
+var attrKeys = map[int]string{
+	1: "mayor_de_18", 2: "mayor_de_21", 3: "identidad",
+	4: "sangre_alergias", 5: "contacto_emergencia", 6: "donante_licencia",
+}
+
+// attrKey da el nombre que usa el front ("mayor_de_18", ...).
+func attrKey(code int) string { return attrKeys[code] }
+
+// parseAttrKey acepta "mayor_de_18" o "A1".
+func parseAttrKey(s string) (int, bool) {
+	for code, k := range attrKeys {
+		if k == s {
+			return code, true
+		}
+	}
+	return parseAttr(s)
+}

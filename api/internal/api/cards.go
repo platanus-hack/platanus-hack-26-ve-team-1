@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/platanus-hack/platanus-hack-26-ve-team-1/api/internal/sign"
 )
 
 type cardOut struct {
@@ -110,14 +112,18 @@ func (s *Server) reactivateOne(ctx context.Context, handle []byte, anyOwner bool
 // (el emisor indica {ciudadanoId}). Dueño o emisor.
 func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		H           string `json:"h"`
-		CiudadanoID int64  `json:"ciudadanoId"`
+		H           string  `json:"h"`
+		CiudadanoID flexInt `json:"ciudadanoId"`
 	}
 	if !readOptionalJSON(w, r, &in) {
 		return
 	}
 	u := userFrom(r.Context())
 	ctx := r.Context()
+	if in.CiudadanoID != 0 && u.Role != "emisor" {
+		writeErr(w, http.StatusForbidden, "Solo un emisor puede reactivar la cédula de otra persona.")
+		return
+	}
 	if in.H != "" {
 		handle, err := parseHandle(in.H)
 		if err != nil {
@@ -136,7 +142,7 @@ func (s *Server) reactivate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "credentials": n})
 		return
 	}
-	target, ok := s.targetCitizen(w, u, in.CiudadanoID)
+	target, ok := s.targetCitizen(w, u, int64(in.CiudadanoID))
 	if !ok {
 		return
 	}
@@ -187,20 +193,26 @@ func (s *Server) targetCitizen(w http.ResponseWriter, u User, requested int64) (
 	return requested, true
 }
 
-// issueCarnet: POST /api/carnet/issue {citizen_id}. El emisor (universidad) emite o renueva el
-// carnet universitario en los celulares ya vinculados del ciudadano.
+// issueCarnet: POST /api/credentials/university {estudianteId} (alias /api/carnet/issue).
+// El carnet sale del perfil (carnet, o se deriva de la identidad: UCV-<cédula>) y lo firma la universidad
+// (emisor 0x02) en los celulares vinculados. 409 si ya tiene carnet; si aún no vinculó su celular,
+// queda autorizado y se emite al vincular.
 func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 	var raw struct {
-		CitizenID    int64 `json:"citizen_id"`
-		CiudadanoID  int64 `json:"ciudadanoId"`
-		EstudianteID int64 `json:"estudianteId"`
-		ID           int64 `json:"id"`
+		CitizenID    flexInt `json:"citizen_id"`
+		CiudadanoID  flexInt `json:"ciudadanoId"`
+		EstudianteID flexInt `json:"estudianteId"`
+		ID           flexInt `json:"id"`
 	}
 	if !readJSON(w, r, &raw) {
 		return
 	}
-	in := struct{ CitizenID int64 }{firstNonZero(raw.CitizenID, raw.CiudadanoID, raw.EstudianteID, raw.ID)}
+	citizenID := firstNonZero(int64(raw.EstudianteID), int64(raw.CiudadanoID), int64(raw.CitizenID), int64(raw.ID))
 	ctx := r.Context()
+	if s.Issuers[sign.IssuerUniversidad] == nil {
+		writeErr(w, http.StatusServiceUnavailable, "Falta la clave del emisor universidad.")
+		return
+	}
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		serverErr(w, err)
@@ -209,8 +221,8 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(ctx)
 
 	var prof []byte
-	if err := tx.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano'`, in.CitizenID).Scan(&prof); errors.Is(err, pgx.ErrNoRows) {
-		writeErr(w, http.StatusNotFound, "ciudadano no encontrado")
+	if err := tx.QueryRow(ctx, `SELECT profile FROM citizens WHERE id = $1 AND role = 'ciudadano' FOR UPDATE`, citizenID).Scan(&prof); errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "Estudiante no encontrado.")
 		return
 	} else if err != nil {
 		serverErr(w, err)
@@ -218,20 +230,39 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 	}
 	var p Profile
 	_ = json.Unmarshal(prof, &p)
+	if p.Carnet == nil && p.Identity != nil && p.Identity.Name != "" && p.Identity.ID != "" {
+		p.Carnet = &struct {
+			Name       string `json:"name"`
+			ID         string `json:"id"`
+			ValidUntil string `json:"valid_until"`
+		}{p.Identity.Name, "UCV-" + digitsOnly(p.Identity.ID), s.now().AddDate(0, 9, 0).Format("2006-01-02")}
+	}
 	if _, ok, err := p.CarnetValue(); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	} else if !ok {
-		writeErr(w, http.StatusUnprocessableEntity, "el perfil no tiene datos de carnet")
+		writeErr(w, http.StatusUnprocessableEntity, "El estudiante no tiene el perfil completo para emitir un carnet.")
 		return
 	}
-	if s.Issuers[2] == nil {
-		writeErr(w, http.StatusServiceUnavailable, "falta la clave del emisor universidad")
+	var issued bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM wallet_credentials wc JOIN devices d ON d.id = wc.device_id
+		                 WHERE d.citizen_id = $1 AND wc.issuer = 2 AND wc.expires_at > now())`, citizenID).Scan(&issued); err != nil {
+		serverErr(w, err)
+		return
+	}
+	if issued {
+		writeErr(w, http.StatusConflict, "El estudiante ya tiene carnet.")
+		return
+	}
+	out, _ := json.Marshal(p)
+	if _, err := tx.Exec(ctx, `UPDATE citizens SET profile = $1::jsonb WHERE id = $2`, string(out), citizenID); err != nil {
+		serverErr(w, err)
 		return
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT d.id, d.handle, d.public_key FROM devices d JOIN cards c ON c.handle = d.handle
-		  WHERE d.citizen_id = $1 AND c.status = 'activa'`, in.CitizenID)
+		  WHERE d.citizen_id = $1 AND c.status = 'activa'`, citizenID)
 	if err != nil {
 		serverErr(w, err)
 		return
@@ -252,22 +283,20 @@ func (s *Server) issueCarnet(w http.ResponseWriter, r *http.Request) {
 		devs = append(devs, d)
 	}
 	rows.Close()
-	if len(devs) == 0 {
-		writeErr(w, http.StatusConflict, "el ciudadano debe vincular su celular a una cédula activa primero")
-		return
-	}
-	n := 0
 	for _, d := range devs {
-		cs, err := s.issueWallet(ctx, tx, d.id, d.handle, d.pub, in.CitizenID)
-		if err != nil {
+		if _, err := s.issueWallet(ctx, tx, d.id, d.handle, d.pub, citizenID); err != nil {
 			serverErr(w, err)
 			return
 		}
-		n += len(cs)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		serverErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dispositivos": len(devs), "estado": "Carnet emitido"})
+	resp := map[string]any{"ok": true, "dispositivos": len(devs)}
+	if len(devs) == 0 {
+		resp["pendiente"] = true
+		resp["mensaje"] = "El carnet se emitirá cuando el estudiante vincule su celular."
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

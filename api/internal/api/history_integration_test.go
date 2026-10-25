@@ -67,10 +67,11 @@ func TestIntegrationHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
-		var out struct{ User struct{ ID int64 } }
+		var out struct{ User struct{ ID string } }
 		json.NewDecoder(resp.Body).Decode(&out)
-		citizenIDs = append(citizenIDs, out.User.ID)
-		return c, out.User.ID
+		id, _ := atoi(out.User.ID)
+		citizenIDs = append(citizenIDs, id)
+		return c, id
 	}
 	ana, anaID := register("ana")
 	luis, luisID := register("luis")
