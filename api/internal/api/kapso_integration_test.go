@@ -175,9 +175,26 @@ func TestIntegrationKapso(t *testing.T) {
 		t.Fatalf("aviso de uso: %+v", got)
 	}
 
-	// Resultados no aprobados, y cuentas con avisos apagados, no generan mensaje.
+	// Un acceso denegado también se avisa, con el motivo.
 	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"02","ts":%d}`, anaCard, now))
+	got = fake.take()
+	if len(got) != 1 || got[0].To != anaPhone || !got[0].Buttons || !strings.Contains(got[0].Body, "firma de la tarjeta no es válida") {
+		t.Fatalf("aviso de firma inválida: %+v", got)
+	}
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"03","ts":%d}`, anaCard, now))
+	got = fake.take()
+	if len(got) != 1 || got[0].Buttons || !strings.Contains(got[0].Body, "bloqueada") {
+		t.Fatalf("aviso de cédula revocada (sin botón): %+v", got)
+	}
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A4","res":"05","ts":%d}`, anaCard, now))
+	got = fake.take()
+	if len(got) != 1 || !strings.Contains(got[0].Body, "no tiene permiso") {
+		t.Fatalf("aviso de sin permiso: %+v", got)
+	}
+
+	// Cuentas con avisos apagados y cédulas desconocidas no generan mensaje.
 	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"01","ts":%d}`, mutedCard, now))
+	event(shop, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A1","res":"02","ts":%d}`, mutedCard, now))
 	event(shop, `{"t":"verif","h":"00000000000000aa","a":"A1","res":"01"}`) // cédula desconocida
 	if got := fake.take(); len(got) != 0 {
 		t.Fatalf("no debía enviarse nada: %+v", got)
