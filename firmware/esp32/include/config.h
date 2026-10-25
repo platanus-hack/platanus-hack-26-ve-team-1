@@ -38,7 +38,7 @@
 #define HB_INTERVAL_MS        5000   // Latido cada 5 s (según contrato P3/PIC)
 #define PIC_TIMEOUT_MS       10000   // PIC bloquea si no ve latido en 10 s
 #define RESULT_DISPLAY_MS     3000   // Pausa tras un resultado antes de volver a reposo
-#define CONSENT_TIMEOUT_MS   10000   // Tras Aceptar, tiempo para acercar la cédula (10 s)
+#define CONSENT_TIMEOUT_MS   60000   // Espera de la respuesta del ciudadano por WhatsApp; sin ella, 06
 #define EMISSION_IDLE_MS     30000   // Emisión abortada si pasan 30 s sin recibir un write
 #define CODE_WAIT_MS         15000   // Vinculación: espera del código que pide el gateway
 #define SCAN_TIMEOUT_MS      10000   // Comando 'scan': espera de una tarjeta para el diagnóstico
@@ -64,7 +64,7 @@ enum TerminalMode {
 enum TerminalState {
     STATE_IDLE,         // Reposo: cada modo anuncia qué espera y pasa a esperar
     STATE_SIN_HORA,     // Sin hora del gateway: no se verifican cédulas
-    STATE_SOLICITUD,    // Modo verificar: el local pidió un dato y se espera la respuesta del ciudadano
+    STATE_SOLICITUD,    // Modo verificar: lectura aprobada que espera la respuesta del ciudadano
     STATE_ACERQUE,      // Esperando la tarjeta
     STATE_READING,      // Vinculación: esperando el código del gateway
     STATE_RESULT,       // Pausa de RESULT_DISPLAY_MS tras un resultado
