@@ -1,4 +1,4 @@
-# Contrato de bytes de SoloLoJusto
+# Contrato de bytes de sIsA
 
 Fuente de verdad para la API (Go), el firmware del lector (ESP32 con micro-ecc) y las PWAs (WebCrypto). Los enlaces entre lector, gateway, PIC y API están en [`contrato-terminal.md`](contrato-terminal.md).
 Cualquier cambio se anuncia al equipo antes de hacerlo. Implementación de referencia:

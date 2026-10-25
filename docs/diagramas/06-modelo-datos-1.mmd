@@ -1,0 +1,84 @@
+erDiagram
+  citizens ||--o{ cards : "posee"
+  citizens ||--o{ devices : "vincula"
+  citizens ||--o{ terminals : "es dueño (owner_id)"
+  citizens ||--o{ issuance_requests : "recibe"
+  cards ||--o{ attributes : "tiene"
+  cards ||--o{ devices : "se vincula a"
+  cards ||--o{ link_codes : "genera"
+  cards ||--o{ wallet_credentials : "deriva"
+  devices ||--o{ wallet_credentials : "guarda"
+  terminals ||--o{ events : "registra"
+  terminals ||--o{ issuance_requests : "ejecuta"
+  cards ||--o{ events : "handle"
+
+  citizens {
+    bigint id PK
+    text email UK
+    text password_hash
+    text role "ciudadano | emisor | comercio"
+    text name
+    text whatsapp_phone
+    bool notifications
+    jsonb profile "nacimiento, identidad, carnet, datos opcionales"
+  }
+  cards {
+    bytea handle PK "8 B seudónimo"
+    bytea uid "4, 7 o 10 B"
+    bigint citizen_id FK
+    text status "activa | revocada"
+    timestamptz issued_at
+    timestamptz revoked_at
+  }
+  attributes {
+    bigint id PK
+    bytea handle FK
+    smallint code "1..6"
+    smallint issuer "1 nacional, 2 universidad"
+    bytea value "hasta 64 B"
+    timestamptz expires_at
+  }
+  devices {
+    bigint id PK
+    bigint citizen_id FK
+    bytea handle FK
+    bytea public_key UK "33 B comprimida"
+  }
+  wallet_credentials {
+    bigint id PK
+    bigint device_id FK
+    bytea handle FK
+    smallint code
+    smallint issuer
+    bytea blob
+    timestamptz expires_at
+  }
+  terminals {
+    bigint id PK
+    text name
+    text role "comercio | registro | salud | transito | emergencia"
+    smallint_array attributes "A1..A6 que pide"
+    text modo "verificar | emergencia | emitir | vincular"
+    text token_hash UK "SHA-256"
+    bigint owner_id FK
+  }
+  events {
+    bigint id PK
+    text kind "verif | tamper"
+    bytea handle "nulo en tamper"
+    bigint terminal_id FK
+    smallint attribute "1..6"
+    smallint result "1..6"
+    bool emergency
+    timestamptz created_at
+  }
+  link_codes {
+    text code PK "6 dígitos"
+    bytea handle FK
+    timestamptz expires_at
+  }
+  issuance_requests {
+    bigint id PK
+    bigint citizen_id FK
+    bigint terminal_id FK
+  }

@@ -2,7 +2,7 @@
 
 ## Resumen
 
-**SoloLoJusto** es el prototipo de una cédula de identidad electrónica emitida por el Estado que *sabe más y muestra menos*: el chip guarda más datos que la cédula actual (tipo de sangre, contacto de emergencia, licencia), pero cada terminal recibe únicamente el dato que necesita y que el ciudadano autoriza. Track: **Trust** · Platanus Hack 26 Caracas.
+**sIsA** es el prototipo de una cédula de identidad electrónica emitida por el Estado que *sabe más y muestra menos*: el chip guarda más datos que la cédula actual (tipo de sangre, contacto de emergencia, licencia), pero cada terminal recibe únicamente el dato que necesita y que el ciudadano autoriza. Track: **Trust** · Platanus Hack 26 Caracas.
 
 ## Problema
 

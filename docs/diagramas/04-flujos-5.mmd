@@ -1,0 +1,11 @@
+flowchart LR
+  W[Billetera] -->|firma hora ‖ atributo<br/>con clave no extraíble| Q["QR SLJ1:…<br/>(regenera cada ≤30 s)"]
+  Q --> V[Verificador PWA]
+  V --> V1{Firma del emisor<br/>válida?}
+  V1 -- No --> N[Rechazado]
+  V1 -- Sí --> V2{Firma del celular<br/>y hora ±30 s?}
+  V2 -- No --> N
+  V2 -- Sí --> V3{Handle no está en<br/>revocaciones locales?}
+  V3 -- No --> N
+  V3 -- Sí --> OK["Mayor de 18: SÍ"]
+  OK -. con red .-> API[(POST /api/events)]

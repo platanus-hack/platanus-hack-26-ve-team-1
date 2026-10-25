@@ -1,4 +1,4 @@
-# Documentación de SoloLoJusto
+# Documentación de sIsA
 
 Cédula electrónica que **sabe más y muestra menos**. Este directorio es la documentación del proyecto; la descripción corta está en [`../project-description.md`](../project-description.md).
 
@@ -22,3 +22,19 @@ Fuentes de verdad técnicas (no se duplican aquí):
 - [`p4-qr.md`](p4-qr.md) (rama `p4-pwa`): formato de presentación QR `SLJ1`.
 
 Los diagramas usan [Mermaid](https://mermaid.js.org/); GitHub los renderiza directamente.
+
+## Formatos y diagramas
+
+| Qué | Dónde |
+|---|---|
+| Documentos Word (uno por documento y uno completo, con los diagramas incrustados) | [`word/`](word/) |
+| Diagramas como imagen (`.png`, `.svg`) y su fuente (`.mmd`) | [`diagramas/`](diagramas/) |
+| Fuente editable de todo | los `.md` de esta carpeta (los diagramas son bloques ```` ```mermaid ````) |
+
+**Regenerar** (desde la raíz del repo; requiere Python con `python-docx` y Node.js):
+
+```bash
+python tools/docs/build_docs.py
+```
+
+**Editar o rehacer un diagrama con una herramienta visual:** abre el archivo `.mmd` de `diagramas/` (o el bloque Mermaid del `.md`) en [mermaid.live](https://mermaid.live) para editarlo y exportar PNG/SVG/PDF; en [draw.io](https://app.diagrams.net) usa *Organizar → Insertar → Avanzado → Mermaid*; en Figma/FigJam se puede generar el diagrama editable a partir del mismo texto. Los SVG se abren en Figma, draw.io o Illustrator.
