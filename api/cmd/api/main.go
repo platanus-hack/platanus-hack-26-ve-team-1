@@ -67,7 +67,11 @@ func main() {
 		srv := &api.Server{DB: db, JWTSecret: []byte(secret), Issuers: issuers, ValidDays: 365,
 			WebhookSecret: os.Getenv("KAPSO_WEBHOOK_SECRET"), AllowedOrigins: origins}
 		if key, id := os.Getenv("KAPSO_API_KEY"), os.Getenv("KAPSO_PHONE_NUMBER_ID"); key != "" && id != "" {
-			srv.Notifier = kapso.New(key, id)
+			kc := kapso.New(key, id)
+			if base := os.Getenv("KAPSO_BASE_URL"); base != "" { // opcional: apuntar a un mock en pruebas
+				kc.BaseURL = base
+			}
+			srv.Notifier = kc
 		} else {
 			log.Print("aviso: KAPSO_API_KEY o KAPSO_PHONE_NUMBER_ID vacíos; no se enviarán avisos de WhatsApp")
 		}
