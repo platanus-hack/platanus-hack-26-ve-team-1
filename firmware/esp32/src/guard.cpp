@@ -17,9 +17,13 @@ void guardInit() {
     pinMode(PIN_PIC_HB, OUTPUT);
     digitalWrite(PIN_PIC_HB, LOW);
 
-    pinMode(PIN_PIC_BLOQ, INPUT_PULLDOWN);
+    // BLOQ_OUT del PIC es de drenador abierto: lo tira a GND mientras todo está bien.
+    // Suelto, cortado o con el PIC muerto, el pull-up lo lleva a ALTO = bloqueado
+    pinMode(PIN_PIC_BLOQ, INPUT_PULLUP);
 
-    isBlocked = (digitalRead(PIN_PIC_BLOQ) == HIGH);
+    // Si el terminal arranca bloqueado, la primera llamada a guardUpdate() lo detecta
+    // como cualquier otro bloqueo (pantallas, tamper y liberación del RC522)
+    isBlocked = false;
     lastHbToggle = millis();
 }
 

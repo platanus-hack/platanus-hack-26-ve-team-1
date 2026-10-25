@@ -21,19 +21,22 @@ TerminalMode linkGetModo();
 uint32_t linkGetCurrentTime();
 bool linkHasTimeSync();
 
-// Setters manuales (para menú oculto de Nextion)
-void linkSetRol(const String& nuevoRol);
-void linkSetModo(TerminalMode nuevoModo);
+// Cuenta las cfg recibidas: cambia con cada una, aunque traiga los mismos valores
+uint32_t linkGetCfgVersion();
 
 // Envíos oficiales al Gateway (Sección 4.4)
 void linkSendHb();
 void linkSendVerif(const String& handleHex, uint8_t atributo, const char* resCode, uint32_t timestamp, bool emergencia);
 void linkSendTamper();
 void linkSendUid(const String& uidHex);
-void linkSendAck(uint8_t bloque, bool ok);
+void linkSendAck(uint8_t sector, uint8_t bloque, bool ok);
 void linkSendWritten(bool ok);
 void linkSendLink(const String& handleHex);
 void linkSendLog(const String& mensaje);
+
+// Menú oculto de la Nextion: pide al gateway el terminal de ese rol (el rol real está
+// atado al token del gateway); la respuesta llega como cfg
+void linkSendRol(const char* rol);
 
 // Envío a la pantalla de comercio del Arduino UNO (Serial1 en GPIO 25)
 void linkSendUnoResult(const char* resCode, uint8_t atributo, bool emergencia = false);

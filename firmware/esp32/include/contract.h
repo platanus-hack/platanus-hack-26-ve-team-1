@@ -32,9 +32,27 @@ struct CedulaAttribute {
     uint8_t  largo;             // 1 B: Longitud útil de valor
     uint32_t vence;             // 4 B: Timestamp Unix (Big-endian)
     uint8_t  handle[8];         // 8 B: Identificador seudónimo de la cédula
-    uint8_t  valor[16];         // 16 B: Valor del atributo (64 B en identidad)
+    uint8_t  valor[64];         // Valor del atributo: 16 B (64 B en identidad)
     uint8_t  firma[64];         // 64 B: Firma ECDSA P-256 (r || s crudo, IEEE P1363)
 };
+
+// Largo máximo del valor en el chip: 64 B en identidad, 16 B en el resto
+inline uint8_t largoMaximoValor(uint8_t atributo) {
+    return (atributo == ATTR_A3_IDENTIDAD) ? 64 : 16;
+}
+
+// Nombre del atributo para las pantallas (mismos textos que la pantalla del comercio)
+inline const char* nombreAtributo(uint8_t atributo) {
+    switch (atributo) {
+        case ATTR_A1_MAYOR_18:  return "Mayor de 18";
+        case ATTR_A2_MAYOR_21:  return "Mayor de 21";
+        case ATTR_A3_IDENTIDAD: return "Identidad";
+        case ATTR_A4_SALUD:     return "Sangre y alergias";
+        case ATTR_A5_CONTACTO:  return "Contacto de emergencia";
+        case ATTR_A6_DONANTE:   return "Donante y licencia";
+        default:                return "Dato desconocido";
+    }
+}
 
 // Convierte un handle de 8 bytes a cadena hexadecimal
 inline String handleToHex(const uint8_t* handle) {
