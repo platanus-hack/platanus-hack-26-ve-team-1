@@ -53,7 +53,7 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 | RF-14 | El terminal responderá con voz, pantalla del ciudadano (Nextion) y pantalla del comercio, que solo recibe códigos. |
 | RF-15 | Un rol sin la clave de un sector obtendrá `05` y no podrá leer el dato. |
 | RF-16 | El rol emergencia leerá sangre y contacto sin consentimiento y marcará el evento `emg = true`. |
-| RF-17 | El rechazo del ciudadano en la pantalla producirá `06` y también se registrará como evento. |
+| RF-17 | El rechazo del ciudadano en la pantalla producirá `06`. Se registra como evento y se avisa solo si ya hay una cédula identificada (en el flujo normal el rechazo ocurre antes de acercarla y no hay handle). |
 
 ### Registro y avisos
 | ID | Requisito |

@@ -56,7 +56,7 @@ flowchart LR
   5. Resultado `01`: voz "acceso concedido", pantalla del comercio con el visto bueno.
   6. Se envía el evento `verif` a la API (vía gateway) → CU-02.
 - **Flujos alternos:**
-  - A1 (`06`): el ciudadano rechaza; no se lee nada; se registra el evento.
+  - A1 (`06`): el ciudadano rechaza; no se lee nada. Como aún no se identificó la cédula, no hay handle y no se envía evento ni aviso (limitación actual).
   - A2 (`05`): el rol no tiene la clave del sector; no se lee el dato.
   - A3 (`02`): la firma no coincide (tarjeta alterada o copiada).
   - A4 (`03`): el handle está en la lista de revocación.

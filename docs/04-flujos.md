@@ -28,7 +28,7 @@ flowchart TD
   T --> U([Aviso WhatsApp, ver secuencia])
 ```
 
-> Orden de comprobación en el firmware: el rechazo `06` ocurre antes de leer la tarjeta (no se lee ningún dato). Para `06` el handle aún no se conoce, así que el firmware debe leer solo el índice (sector 1, clave pública de todos los roles) para poder reportar el evento y avisar al dueño; el dato pedido no se toca.
+> Limitación actual del `06`: en el flujo normal el ciudadano rechaza **antes** de acercar la cédula, así que el firmware no conoce el handle y (`enviarRechazo` en `firmware/esp32/src/main.cpp`) no envía el evento; por tanto no hay WhatsApp para ese rechazo. Solo se envía `verif` con `06` si ya había una cédula identificada. Los resultados 01–05 siempre llevan handle (el del registro si su firma se verificó; si no, el del índice).
 
 ### Diagrama de secuencia (terminal → WhatsApp)
 

@@ -203,7 +203,7 @@ func TestIntegrationKapso(t *testing.T) {
 	// Emergencia.
 	event(emerg, fmt.Sprintf(`{"t":"verif","h":"%s","a":"A4","res":"01","ts":%d,"emg":true}`, anaCard, now))
 	got = fake.take()
-	if len(got) != 1 || !strings.Contains(got[0].Body, "Un terminal de emergencia (Ambulancia 1) leyó tu tipo de sangre y contacto") {
+	if len(got) != 1 || !strings.Contains(got[0].Body, "un terminal de emergencia (Ambulancia 1) leyó tu tipo de sangre y contacto") {
 		t.Fatalf("aviso de emergencia: %+v", got)
 	}
 

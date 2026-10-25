@@ -29,7 +29,7 @@ Aplicar las migraciones en orden y definir `DATABASE_URL=postgres://postgres:slj
 | 3 | María revocada | `verif` `03` | WhatsApp "bloqueada" sin botón |
 | 4 | Credencial vencida | `verif` `04` | WhatsApp "vencida" con botón |
 | 5 | Bar pide salud (A4) | `verif` `05` | WhatsApp "no se compartió nada" |
-| 6 | Ciudadano rechaza | `verif` `06` | WhatsApp "no aceptaste compartir" |
+| 6 | Rechazo con cédula identificada | `verif` `06` | WhatsApp "no aceptaste compartir" (el firmware hoy no lo envía sin handle) |
 | 7 | Emergencia | `verif` `01` `emg` | WhatsApp de emergencia con botón |
 | 8 | Avisos apagados / sin teléfono / handle desconocido | `verif` cualquiera | Sin mensaje; evento guardado |
 | 9 | Botones no soportados | `verif` `01` | Texto con "Responde BLOQUEAR." |
@@ -55,7 +55,7 @@ Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_t
 - [ ] Cédula de María (revocada) → `03` y WhatsApp sin botón.
 - [ ] Tarjeta alterada → `02` y WhatsApp.
 - [ ] Bar con atributo de salud → `05`.
-- [ ] Rechazar en la Nextion → `06` y WhatsApp.
+- [ ] Rechazar en la Nextion → `06` en pantalla y UNO; sin WhatsApp (no hay handle antes de acercar la cédula).
 - [ ] Terminal de emergencia → lectura sin consentimiento y aviso.
 - [ ] Responder BLOQUEAR → siguiente intento da `03`.
 - [ ] Abrir la carcasa → bloqueo, voz y alerta.
@@ -63,4 +63,14 @@ Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_t
 
 ## Resultados
 
-Se completa tras la fusión y la corrida de cada nivel (ver el PR de integración).
+Corrida sobre la rama `integracion` (main + p1-backend + p2-esp32 + pic_guardian):
+
+| Nivel | Resultado |
+|---|---|
+| `go vet` y `go test ./...` | OK |
+| `SLJ_INTEGRATION=1 go test ./...` con Postgres 16 en Docker y las 6 migraciones | OK (incluye avisos 01–05, emergencia, respaldo en texto, tamper y webhook) |
+| `node tools/verify.mjs` | Todo correcto |
+| Front: `npm run lint` y `npm run build` | OK |
+| Firmware: `pio run` | No ejecutado: `pio` no está instalado en esta máquina |
+| E2E con mock de Kapso | Cubierto por el notificador falso de la prueba de integración; no se corrió un mock HTTP aparte |
+| Hardware y Kapso real | Pendiente (checklist) |
