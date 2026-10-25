@@ -40,7 +40,7 @@ Compilar requiere Go 1.26 o más nuevo; `gateway.exe` corre sin Go. Solo un prog
 | `estado` | Lector, terminal activo y eventos en cola |
 | `salir` | Cierra el gateway (también Ctrl+C) |
 
-Un mismo lector hace de bar, clínica o ambulancia en la demo: al cambiar de terminal, el gateway usa su token y le envía su `cfg` al lector. El cambio también se puede hacer desde el menú oculto de la Nextion, que envía `{"t":"rol","rol":"salud"}`; el gateway activa el terminal con ese rol.
+Un mismo lector hace de bar, clínica o ambulancia en la demo: al cambiar de terminal, el gateway usa su token y le envía su `cfg` al lector.
 
 ## Pruebas
 

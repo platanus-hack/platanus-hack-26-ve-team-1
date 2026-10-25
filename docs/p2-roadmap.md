@@ -20,7 +20,7 @@ SoloLoJusto es el prototipo de una **cédula electrónica que sabe más y muestr
 
 > En el roadmap general el terminal figura como "Arduino Mega". **Lo reemplaza un ESP32**: mismas funciones, mismo protocolo con el gateway; cambian pines, niveles (3,3 V), cripto (mucho más rápida) y almacenamiento (NVS en vez de EEPROM).
 
-**Entregable de P2:** el ESP32 que lee la cédula, verifica la firma y decide, con **cuatro modos**: verificar, emergencia, emitir y vincular; más la HMI del ciudadano en la **Nextion**.
+**Entregable de P2:** el ESP32 que lee la cédula, verifica la firma y decide, con **cuatro modos**: verificar, emergencia, emitir y vincular. El ciudadano no tiene pantalla propia: el resultado sale en la pantalla del comercio (UNO) y la respuesta a la solicitud llega del gateway (`consent`).
 
 | Pieza | Dueño | Relación con P2 |
 |---|---|---|
@@ -37,7 +37,6 @@ SoloLoJusto es el prototipo de una **cédula electrónica que sabe más y muestr
 |---|---|---|
 | GPIO19 MISO, GPIO23 MOSI, GPIO18 SCK, GPIO5 SDA(SS), GPIO4 RST | **RC522** (SPI) | SPI por hardware (VSPI). `MFRC522 rfid(5, 4);` IRQ sin conectar |
 | 3V3 → (Q1 de P3) → 3.3V del RC522 | RC522 | **Solo 3,3 V.** Sin Q1 listo, directo al 3V3 |
-| GPIO17 TX2 → RX · GPIO16 RX2 ← TX | Nextion | `Serial2`, 9600 (valor de fábrica de la Nextion) |
 | GPIO25 TX1 → pin 0 (RX) | UNO del comercio (P3) | `Serial1.begin(9600, SERIAL_8N1, 35, 25)` (RX en GPIO35, sin conectar). Solo envío |
 | GPIO26 (salida) | PIC `HB_IN` | Latido: cambiar de estado cada 5 s |
 | GPIO27 (entrada, `INPUT_PULLUP`) | PIC `BLOQ_OUT` | `BLOQ_OUT` es de drenador abierto: BAJO = normal; ALTO o PIC desconectado = bloqueado. Sin el PIC, puentear GPIO27 a GND |
@@ -46,7 +45,6 @@ SoloLoJusto es el prototipo de una **cédula electrónica que sabe más y muestr
 
 Niveles de voltaje (lo más importante del cambio a ESP32):
 - **PIC a 3,3 V** (P3 lo configura en la Curiosity Nano). Así latido y BLOQ quedan a 3,3 V en ambos sentidos.
-- **Nextion**: se alimenta a 5 V, pero su TX sale a 3,3 V en los modelos habituales → directo al GPIO16. **Medirlo** con el multímetro antes de conectar; si da 5 V, poner un divisor (p. ej. 1 kΩ / 2 kΩ).
 - **RC522**: trabaja a 3,3 V igual que el ESP32 → compatible directo. **A 5 V se daña.** Se alimenta del pin 3V3 del ESP32 pasando por Q1 (el corte del guardián de P3).
 - **UNO**: recibe 3,3 V del GPIO25; el UNO lo lee como ALTO (umbral ~3 V). Si falla, P3 añade un transistor o un adaptador de nivel.
 - Pines a evitar: GPIO 6–11 (flash), 0, 2, 12, 15 (arranque), 34–39 solo entrada y sin pull-up.
@@ -60,7 +58,6 @@ Niveles de voltaje (lo más importante del cambio a ESP32):
 - **VS Code + PlatformIO** (perfil "Arduino" si comparte máquina con MPLAB).
 - **Driver USB-serial** del ESP32 en Windows: CP210x (Silicon Labs) o CH340 (WCH), según el chip de la placa.
 - COM fijo en el Administrador de dispositivos: **ESP32 = COM10** (el que espera el gateway de P3).
-- **Nextion Editor** (solo Windows) para las pantallas y el `.tft`; subirlo por microSD (más simple) o por un adaptador USB-TTL.
 - **Auto-reset por DTR/RTS:** las placas ESP32 se reinician (o entran en modo de grabación) si el programa que abre el puerto activa DTR/RTS. Por eso:
   - En `platformio.ini`: `monitor_dtr = 0` y `monitor_rts = 0`.
   - P3 debe hacer `port.set({ dtr: false, rts: false })` al abrir el puerto en el gateway.
@@ -100,7 +97,6 @@ firmware/esp32/
     nfc.cpp/.h      # RC522: UID, autenticar, leer/escribir bloques, reinit tras corte
     verify.cpp/.h   # parseo del atributo, SHA-256 (mbedTLS), uECC_verify, vigencia, revocación
     link.cpp/.h     # serial con el gateway (JSON por línea)
-    hmi.cpp/.h      # Nextion: cambiar página, poner textos, leer toques
     store.cpp/.h    # NVS (Preferences): lista de revocación
     guard.cpp/.h    # latido y entrada BLOQ_IN
 test/
@@ -113,7 +109,6 @@ WiFi.mode(WIFI_OFF);            // #include <WiFi.h>
 btStop();
 Serial.setRxBufferSize(1024);   // antes de begin
 Serial.begin(115200);
-Serial2.begin(9600, SERIAL_8N1, 16, 17);   // Nextion
 Serial1.begin(9600, SERIAL_8N1, 35, 25);   // UNO (solo TX)
 pinMode(26, OUTPUT);            // HB
 pinMode(27, INPUT_PULLUP);      // BLOQ_IN (drenador abierto del PIC)
@@ -247,25 +242,9 @@ Nombres de campos = *propuesta* compartida con P3; confirmar y copiar a `docs/co
 - **Toda salida por `Serial` debe ser JSON** (el gateway lee esa línea). Nada de `Serial.println("debug")` suelto: usar `{"t":"log","m":"..."}`. Los mensajes de arranque del ESP32 (bootloader) son basura que el gateway ya descarta.
 - Con el ESP32, `rev` puede ir en trozos más grandes que con el Mega, pero mantener líneas < 512 B.
 
-### 4.5 Nextion (HMI del ciudadano)
+### 4.5 Pantalla del ciudadano (descartada)
 
-> Implementado con pantallas dibujadas desde el ESP32 sobre un proyecto base mínimo: sin componentes ni "Send Component ID"; los toques llegan como coordenadas. El menú oculto pide el cambio de terminal al gateway. Proyecto base, flujo y pruebas: [`docs/hmi-nextion.md`](hmi-nextion.md). La tabla queda como referencia del diseño.
-
-| Página | Contenido | Toques |
-|---|---|---|
-| `p0` espera | Logo genérico, "Acerque su cédula cuando se le pida". Zona invisible en una esquina | Pulsación larga en la zona invisible → `p6` |
-| `p1` solicitud | "**{local}** pide: **{atributo}**" | `Aceptar`, `Rechazar` |
-| `p2` acerque | "Acerque su cédula" + animación | — |
-| `p3` verificando | Animación breve | — |
-| `p4` resultado | ✓ / ✗ grande + texto del código | — (vuelve a `p0` a los 3 s) |
-| `p5` código | Código de 6 dígitos + cuenta regresiva 2:00 | — |
-| `p6` menú oculto | Bar · Hotel · Hospital · Paramédico · Emitir · Vincular | Cada botón |
-| `p7` bloqueado | "Terminal bloqueado" en rojo | — |
-| `p8` emergencia | Tipo de sangre, alergias, contacto (para el paramédico) | — (vuelve a `p0` a los 15 s) |
-
-- ESP32 → Nextion (`Serial2`): comandos de texto terminados en `0xFF 0xFF 0xFF`, p. ej. `page 1`, `t0.txt="Bar La Esquina"`.
-- Nextion → ESP32: activar **"Send Component ID"** en los botones; llega `0x65 página componente evento 0xFF 0xFF 0xFF`. Parsear esos 7 bytes con un helper propio.
-- Generar la fuente en Nextion Editor incluyendo `áéíóúñ¿¡`.
+La Nextion se descartó el 2026-10-25 y su código se eliminó. El consentimiento llega del gateway como `{"t":"consent","approved":true|false}` (en pruebas, `a`/`r` en la consola) y el resultado se muestra en la pantalla del comercio (UNO).
 
 ### 4.6 Lista de revocación en NVS
 
@@ -292,21 +271,19 @@ Nombres de campos = *propuesta* compartida con P3; confirmar y copiar a `docs/co
   ✅ Se imprimen 16 B; autenticar con una clave incorrecta falla limpio, sin colgar.
 - [ ] **3. Firma en el ESP32 + tiempo.** Sketch de prueba con el vector de P1 (`test/vectors.h`): SHA-256 con mbedTLS, `uECC_verify`, medir con `micros()`. Probar también el vector alterado.
   ✅ Válida → 1; alterada → 0. Anotar el tiempo para la reunión de H4 (se espera muy por debajo de 1 s; el riesgo de "micro-ecc lento" del roadmap queda resuelto con el ESP32).
-- [ ] **4. Hola mundo en la Nextion** por `Serial2`: el ESP32 cambia un texto y un botón se detecta. **Medir antes el voltaje del TX de la Nextion.**
-  ✅ Texto cambia desde el ESP32; tocar el botón imprime el frame `0x65…` (vía `log`).
+- ~~**4. Hola mundo en la Nextion**~~ Descartado: el terminal ya no tiene pantalla del ciudadano.
 
-**Punto de control H4:** UID leído, bloque leído, firma verificada con tiempo medido, Nextion bidireccional.
+**Punto de control H4:** UID leído, bloque leído, firma verificada con tiempo medido.
 
-### H4–H12 · Lectura y pantallas
+### H4–H12 · Lectura
 
 - [ ] **5. Módulo de lectura por rol** (`nfc.cpp`, `verify.cpp`): dado el atributo y la clave A del rol, autenticar cada sector, leer los bloques, armar `UID ‖ campos` y separar la firma.
   ✅ Con una tarjeta escrita a mano con el vector de P1 (clave de fábrica por ahora), el mensaje reconstruido es idéntico al de P1 (comparar en hex).
 - [ ] **6. Protocolo serial** (`link.cpp`): búfer de línea, `deserializeJson`, despacho por `t`, `send()` de cada tipo, `hb` cada 5 s.
   ✅ Contra el `mega-sim`/gateway de P3 o a mano en el monitor: `cfg` cambia el estado, líneas basura no cuelgan, `hb` sale puntual, nada que no sea JSON sale por `Serial`.
-- [ ] **7. Pantallas Nextion** `p0`–`p5` y `p7` en Nextion Editor + `hmi.cpp`.
-  ✅ Recorrer todas las páginas desde el ESP32; Aceptar/Rechazar llegan.
-- [ ] **8. Recibir `cfg`**: rol, atributo pedido, nombre del local y modo; `p1` muestra "{local} pide: {atributo}".
-  ✅ Cambiar `cfg` desde el gateway cambia el texto sin reiniciar.
+- ~~**7. Pantallas Nextion**~~ Descartado.
+- [ ] **8. Recibir `cfg`**: rol, atributo pedido, nombre del local y modo; el log muestra "{local} pide: {atributo}".
+  ✅ Cambiar `cfg` desde el gateway cambia la solicitud sin reiniciar.
 
 **Punto de control H12:** tarjeta de prueba verificada en el ESP32.
 
@@ -328,25 +305,24 @@ Nombres de campos = *propuesta* compartida con P3; confirmar y copiar a `docs/co
 ### H18–H24 · Integración
 
 - [ ] **13. Primera emisión y verificación de punta a punta** con P1 y P3 (gateway real, API real).
-- [ ] **14. Modo vincular**: leer sector 1 (índice) → `link` con el handle → mostrar `code` en `p5` durante 2 min.
+- [ ] **14. Modo vincular**: leer sector 1 (índice) → `link` con el handle → el gateway recibe `code` y lo muestra.
   ✅ P4 escribe el código en la billetera y la vinculación se completa.
-- [ ] **15. Guardián** (`guard.cpp`): cambiar GPIO26 cada 5 s sin bloquear el `loop()`; si GPIO27 pasa a ALTO → `p7`, enviar `tamper` una sola vez y dejar de leer hasta que vuelva a BAJO.
-  ✅ Con P3: abrir la tapa → `p7` + `tamper` + voz; desconectar GPIO26 → el PIC bloquea en 10–11 s.
+- [ ] **15. Guardián** (`guard.cpp`): cambiar GPIO26 cada 5 s sin bloquear el `loop()`; si GPIO27 pasa a ALTO → enviar `lock` al UNO y `tamper` una sola vez y dejar de leer hasta que vuelva a BAJO.
+  ✅ Con P3: abrir la tapa → UNO en rojo + `tamper` + voz; desconectar GPIO26 → el PIC bloquea en 10–11 s.
 
 **Punto de control H24:** flujo completo cédula → terminal → voz → WhatsApp → historial.
 
 ### H24–H30 · Diferenciadores
 
-- [ ] **16. Modo emergencia**: sin `p1`, leer A4 y A5 con la clave de salud, verificar, mostrar `p8`, `verif` con `emg:true`.
+- [ ] **16. Modo emergencia**: sin consentimiento, leer A4 y A5 con la clave de salud, verificar, `verif` con `emg:true` y resultado al UNO.
   ✅ El paramédico ve sangre y contacto en menos de 2 s tras acercar; llega el WhatsApp de emergencia.
-- [ ] **17. Menú oculto `p6`** para cambiar de rol en la demo (Bar, Hotel, Hospital, Paramédico) y entrar a Emitir/Vincular.
-  ✅ Cambiar de rol sin reconectar nada.
+- ~~**17. Menú oculto `p6`**~~ Descartado: el rol se cambia desde la consola del gateway (`terminal <nombre>`).
 - [ ] **18. Matriz de pruebas de P5** y correcciones: Ana en bar, Luis en bar, María revocada, tarjeta alterada, bar intentando leer salud, hotel, paramédico, carcasa abierta.
 
 ### H30–H36 · Demo
 
 - [ ] **19. Tarjetas finales**: 4 emitidas y etiquetadas (Ana, Luis, María, alterada) + 2 vírgenes de repuesto.
-- [ ] Firmware final etiquetado en git (`git tag demo-esp32`) y `.tft` de la Nextion guardado en el repo.
+- [ ] Firmware final etiquetado en git (`git tag demo-esp32`).
 
 ---
 
@@ -361,13 +337,12 @@ Nombres de campos = *propuesta* compartida con P3; confirmar y copiar a `docs/co
 | Tras abrir y cerrar la tapa el lector no responde | El RC522 perdió la configuración al cortarse; hacer `PCD_Init()` de nuevo |
 | El ESP32 se reinicia o queda en "waiting for download" al abrir el puerto | DTR/RTS activos: `monitor_dtr/rts = 0`; en el gateway `port.set({dtr:false, rts:false})` |
 | "Connecting…" eterno al grabar | Mantener BOOT; el gateway o el monitor tienen el puerto abierto |
-| `Brownout detector was triggered` | Alimentación débil: cable USB corto/bueno, Nextion en el riel externo, Wi-Fi apagado |
+| `Brownout detector was triggered` | Alimentación débil: cable USB corto/bueno, Wi-Fi apagado |
 | Reinicios con "Task watchdog" | Algún bucle bloqueante sin `delay()`/`yield()` |
 | Autenticación falla en una tarjeta antes buena | Trailer mal escrito (sector perdido) o clave de rol equivocada |
 | Firma siempre inválida con el vector de P1 | Firma en DER y no r‖s; clave con `0x04`; orden o endianness de campos distinto; UID no incluido |
 | El gateway recibe basura | Prints de depuración que no son JSON, o mensajes del bootloader al arrancar |
 | GPIO27 lee ALTO sin motivo (terminal bloqueado) | El PIC no está conectado o no comparte GND. Sin el PIC, puentear GPIO27 a GND |
-| Nextion no responde | TX/RX no cruzados, baudios distintos (9600), o la Nextion sin 5 V propios |
 
 ---
 

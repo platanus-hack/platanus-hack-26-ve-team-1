@@ -197,8 +197,6 @@ func (p *Puente) manejar(ctx context.Context, m protocolo.Mensaje) {
 		}()
 	case "link":
 		go p.vincular(ctx, m.H)
-	case "rol":
-		go p.cambiarPorRol(ctx, m.Rol)
 	case "ack", "written":
 		if p.emitiendo.Load() {
 			select {
@@ -424,37 +422,6 @@ func (p *Puente) Nombres() []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// cambiarPorRol atiende el menú oculto de la Nextion: activa el terminal que tiene ese
-// rol (si el activo ya lo tiene, se queda) y le envía su cfg al lector. Si ninguno lo
-// tiene, reenvía la cfg actual para que el lector no se quede esperando.
-func (p *Puente) cambiarPorRol(ctx context.Context, rol string) {
-	actual, _ := p.Activo()
-	elegido := ""
-	for _, nombre := range p.Nombres() {
-		c, ok := p.configDe(ctx, nombre)
-		if ok && c.Rol == rol && (elegido == "" || nombre == actual) {
-			elegido = nombre
-		}
-	}
-
-	if elegido == "" {
-		p.log.Printf("Menú del lector: ningún terminal tiene el rol %q; sigue %s", rol, actual)
-	} else if err := p.CambiarTerminal(elegido); err == nil {
-		p.log.Printf("Menú del lector: terminal activo %s (rol %s)", elegido, rol)
-	}
-	p.Sincronizar(ctx, true)
-}
-
-// configDe devuelve la config de un terminal desde la API o, si no responde, desde la copia local.
-func (p *Puente) configDe(ctx context.Context, nombre string) (api.Config, bool) {
-	c, err := p.api.Config(ctx, p.tokens[nombre])
-	if err == nil {
-		p.guardar(archivoConfig(nombre), c)
-		return c, true
-	}
-	return c, p.recuperar(archivoConfig(nombre), &c)
 }
 
 // CambiarTerminal cambia el terminal activo (en la demo, un mismo lector hace de bar,

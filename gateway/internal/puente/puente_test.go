@@ -278,30 +278,6 @@ func TestCambiarDeTerminalEnviaSuCfgYSuToken(t *testing.T) {
 	}
 }
 
-func TestMenuDelLectorCambiaElTerminalPorRol(t *testing.T) {
-	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar, "tok-cli": cfgClinica}}
-	p, l, _ := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar", "Clinica Salud": "tok-cli"}, "Bar La Esquina")
-	l.sincronizar()
-
-	l.enviar(`{"t":"rol","rol":"salud"}`)
-	l.recibir("time")
-	l.recibir("rev")
-	if c := l.recibir("cfg"); c["rol"] != "salud" || c["local"] != "Clinica Salud" {
-		t.Errorf("cfg tras pedir salud: %v", c)
-	}
-	if activo, _ := p.Activo(); activo != "Clinica Salud" {
-		t.Errorf("terminal activo: %s", activo)
-	}
-
-	// Un rol que ningún terminal tiene: reenvía la cfg actual para que el lector salga de la espera
-	l.enviar(`{"t":"rol","rol":"transito"}`)
-	l.recibir("time")
-	l.recibir("rev")
-	if c := l.recibir("cfg"); c["rol"] != "salud" {
-		t.Errorf("cfg tras pedir un rol inexistente: %v", c)
-	}
-}
-
 func TestConsolaNoEnviaNadaAntesDelPrimerLatido(t *testing.T) {
 	f := &apiFalsa{configs: map[string]api.Config{"tok-bar": cfgBar, "tok-cli": cfgClinica}}
 	p, l, reg := armar(t, f, map[string]string{"Bar La Esquina": "tok-bar", "Clinica Salud": "tok-cli"}, "Bar La Esquina")

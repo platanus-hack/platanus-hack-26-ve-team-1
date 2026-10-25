@@ -4,7 +4,6 @@
 
 #include "link.h"
 #include "store.h"
-#include "hmi.h"
 #include <ArduinoJson.h>
 
 // Configuración activa (rol con los nombres del backend: comercio, registro, salud, transito, emergencia)
@@ -34,7 +33,7 @@ extern void onGatewayWriteBlock(uint8_t sector, uint8_t bloque, const String& he
 extern void onGatewaySeal();
 extern void onGatewayCodeReceived(const String& code6);
 extern void onGatewayCardSimulate(uint8_t cardIndex);
-extern void onGatewayConsentSimulate(bool approved);
+extern void onGatewayConsent(bool approved);
 extern void onGatewayScan();
 
 void linkInit() {
@@ -134,14 +133,6 @@ void linkSendLog(const String& mensaje) {
     Serial.println();
 }
 
-void linkSendRol(const char* rol) {
-    JsonDocument doc;
-    doc["t"] = "rol";
-    doc["rol"] = rol;
-    serializeJson(doc, Serial);
-    Serial.println();
-}
-
 void linkSendUnoResult(const char* resCode, uint8_t atributo, bool emergencia) {
     // Regla de P3: No mandar códigos 07 ni 08 (el UNO los muestra como "Error de lectura")
     const char* safeRes = resCode;
@@ -198,21 +189,13 @@ static void processJsonLine(const char* line) {
             onGatewayCardSimulate(2); // Vector 2: Tarjeta vencida (04)
             return;
         } else if (s == "a" || s == "acepto" || s == "aceptar") {
-            onGatewayConsentSimulate(true);  // Como tocar Aceptar en la Nextion
+            onGatewayConsent(true);   // El ciudadano acepta la solicitud
             return;
         } else if (s == "r" || s == "rechazo" || s == "rechazar") {
-            onGatewayConsentSimulate(false); // Como tocar Rechazar en la Nextion (06)
+            onGatewayConsent(false);  // El ciudadano la rechaza (06)
             return;
         } else if (s == "scan" || s == "nfc") {
             onGatewayScan();  // Diagnóstico del RC522 y de la tarjeta, en cualquier modo
-            return;
-        } else if (s == "dim=10") {
-            hmiSendCmd("dim=10");
-            linkSendLog("Nextion: brillo atenuado al 10%");
-            return;
-        } else if (s == "dim=100") {
-            hmiSendCmd("dim=100");
-            linkSendLog("Nextion: brillo al 100%");
             return;
         } else if (s == "help" || s == "ayuda" || s == "?") {
             linkSendLog("=== Comandos de Terminal ===");
@@ -220,10 +203,9 @@ static void processJsonLine(const char* line) {
             linkSendLog("  '1' o 'leer'     -> Leer cedula oficial (Ana - Mayor 18)");
             linkSendLog("  '2' o 'alterada' -> Probar cedula manipulada (Firma falsa 02)");
             linkSendLog("  '3' o 'vencida'  -> Probar cedula vencida (04)");
-            linkSendLog("  'a' / 'r'        -> Aceptar / rechazar la solicitud, como en la Nextion");
+            linkSendLog("  'a' / 'r'        -> Aceptar / rechazar la solicitud");
             linkSendLog("  Tarjeta fisica: con hora, 'a' y apoyarla antes de 10 s");
             linkSendLog("  'scan'           -> Probar el lector y ver que tiene la tarjeta (sin hora ni 'a')");
-            linkSendLog("  'dim=10'/100     -> Probar pantalla Nextion");
             return;
         }
 
@@ -310,30 +292,10 @@ static void processJsonLine(const char* line) {
         uint8_t card = doc["card"] | 0;
         onGatewayCardSimulate(card);
     }
-    // 8. consent: Simulación de consentimiento desde consola
+    // 8. consent: Respuesta del ciudadano a la solicitud
     else if (strcmp(t, "consent") == 0) {
         bool app = doc["approved"] | true;
-        onGatewayConsentSimulate(app);
-    }
-    // 9. hmi_test: Prueba directa de pantalla Nextion (Paso 4 del Roadmap)
-    else if (strcmp(t, "hmi_test") == 0) {
-        hmiTestHello();
-    }
-    // 10. hmi_cmd: Enviar comando libre a la Nextion (ej: {"t":"hmi_cmd","cmd":"page 1"})
-    else if (strcmp(t, "hmi_cmd") == 0) {
-        String cmd = doc["cmd"] | "";
-        if (cmd.length() > 0) {
-            hmiSendCmd(cmd);
-            linkSendLog("Enviado a Nextion: " + cmd);
-        }
-    }
-    // 11. hmi_baud: Cambiar baudios de Serial2 para probar si la pantalla corre a 115200 o 9600
-    else if (strcmp(t, "hmi_baud") == 0) {
-        uint32_t b = doc["b"] | 9600;
-        Serial2.begin(b, SERIAL_8N1, PIN_NEXTION_RX, PIN_NEXTION_TX);
-        delay(100);
-        hmiTestHello();
-        linkSendLog("Serial2 cambiado a " + String(b) + " baudios");
+        onGatewayConsent(app);
     }
 }
 
