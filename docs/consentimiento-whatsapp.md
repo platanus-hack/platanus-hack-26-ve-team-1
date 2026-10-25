@@ -237,13 +237,12 @@ Para que sepas qué espera el gateway de tus endpoints:
 4. `protocolo.Consent(bool)` para armar la línea.
 5. Pruebas en `puente_test.go` con la `apiFalsa`.
 
-## 7. Documentación que hay que actualizar
+## 7. Documentación
+
+Ya describen el flujo nuevo: `02-srs.md` (RF-17), `03-casos-de-uso.md` (CU-01), `04-flujos.md`, `07-seguridad-privacidad.md` y `09-pruebas.md`. Cuando implementes la API, agrega:
 
 | Archivo | Cambio |
 |-|-|
-| `docs/04-flujos.md` | El flujo de verificación: lee → verifica → si `01`, pregunta por WhatsApp → `01` o `06`. Agregar la secuencia de la sección 2 |
-| `docs/03-casos-de-uso.md` | El caso "compartir un dato": el consentimiento es por WhatsApp, después de acercar la cédula |
-| `docs/02-srs.md` | Requisito nuevo: el terminal no revela un dato aprobado sin la autorización del titular por WhatsApp; 60 s sin respuesta = `06` |
-| `docs/07-seguridad-privacidad.md` | El lector lee y verifica antes del consentimiento, pero no revela ni registra el `01` hasta tenerlo |
-| `docs/09-pruebas.md` | Casos de la sección 4.6 y checklist con hardware |
 | `docs/contrato-terminal.md`, enlace 4 | `POST /api/consent` y `GET /api/consent/{id}` en la tabla de endpoints |
+| `docs/06-modelo-datos.md` | La tabla `consent_requests` en el diagrama entidad-relación |
+| `docs/09-pruebas.md` | Los casos de la sección 4.6 y sus resultados |

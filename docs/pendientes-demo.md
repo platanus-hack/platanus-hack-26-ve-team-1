@@ -13,6 +13,10 @@ Estado al 2026-10-25 en la rama `integracion`. Cada tarea dice quién la toma, q
 - **API:** pruebas OK, incluidas las de integración con Postgres según `09-pruebas.md`. Avisos de WhatsApp en cada lectura y BLOQUEAR por webhook.
 - **Web y PWA:** lint y build OK.
 - **La Nextion se eliminó** del código y la documentación.
+- **Cédulas de demo emitidas en Render y comprobadas con `scan`:** Ana Pérez (UID `A5:11:69:6A`, handle `DB3A215CECA2B951`, A1–A6) y María López (UID `E3:91:BF:33`, handle `C5C288ACD5145568`, sin A1 ni A2 por ser menor: en el bar da `05`).
+- **Corregido el sellado de tarjetas:** la comprobación del trailer fallaba y dejaba los sectores sin sellar (commit `763f052`).
+
+**Fuera de la demo:** voz (no hay audios) y código de vinculación de la billetera (el terminal no tiene dónde mostrarlo). El firmware y el gateway conservan el modo vincular y el módulo de voz, pero no se usan.
 
 ## 1. Camino crítico
 
@@ -24,7 +28,7 @@ Sin estas tareas no hay demo. En orden:
 | 2 | Consentimiento en la API y Kapso ([`consentimiento-whatsapp.md`](consentimiento-whatsapp.md)) | Samuel | — |
 | 3 | `pedido`/`consent` en el gateway | old-lx | 2 |
 | 4 | API desplegada en Render con la migración 000007 y el webhook de Kapso apuntando a ella | Samuel | 2 |
-| 5 | Emitir las tarjetas de demo (sección 3.2) | old-lx + Manuela | 1, 4 |
+| 5 | ~~Emitir las tarjetas de demo~~ Hecho: Ana y María (sección 3.2) | old-lx | — |
 | 6 | Checklist con hardware completo (sección 7) | todos | 1–5 |
 | 7 | PR de `integracion` a `main` (sección 8) | Samuel o koprolito | 6 |
 
@@ -55,37 +59,27 @@ Hoy el RC522 funciona conectado directo al 3V3 del ESP32, pero **no respondía a
 - [ ] Carcasa: lector accesible, UNO visible para el comercio, precinto del PIC atravesando la tapa.
 - [ ] Alimentación: un hub USB con fuente propia, o cables cortos y buenos. Probar 10 minutos seguidos sin reinicios (`Brownout`).
 
-### 2.4 Audios del gateway
-
-El gateway reproduce audios, pero **la carpeta `gateway/audio/` no existe**: hoy no suena nada.
-
-- [ ] Generar con ElevenLabs (o grabar) los archivos con estos nombres, en `.wav` o `.mp3`: `acceso_concedido`, `acceso_denegado`, `cedula_revocada`, `cedula_vencida`, `sin_permiso`, `acceso_emergencia`, `vinculacion_lista`, `terminal_bloqueado`.
-- [ ] Opcional: un `esperando_autorizacion` para cuando se envía el WhatsApp (hay que agregar la constante en `gateway/internal/voz/voz.go`).
-- [ ] Probar con los parlantes de la laptop de la demo.
-
 ## 3. Firmware ESP32 (Manuela y old-lx)
 
 ### 3.1 Probar con tarjetas físicas
 
-- [ ] Con el gateway conectado y una cédula emitida: `01` → "Esperando autorización" → `a` → verde; repetir con `r` → rojo.
+- [ ] Con el gateway como "Bar La Esquina": Ana → "Esperando autorización" → `a` → verde; repetir con `r` → rojo.
 - [ ] Esperar 60 s sin responder → `06`.
-- [ ] Tarjeta alterada → `02` de inmediato, sin preguntar.
+- [ ] María → `05` de inmediato, sin preguntar.
 - [ ] Bar pidiendo A4 → `05` de inmediato.
 
-### 3.2 Emitir las tarjetas de demo
+### 3.2 Tarjetas de demo
 
-`ESCRIBIR_TRAILERS` está en 1: **un trailer mal grabado inutiliza el sector para siempre**.
-
-- [ ] Primero, una tarjeta de sacrificio: emitir y verificar con `scan` que los sectores digan `R` y que la cédula verifique `01`.
-- [ ] Emitir Ana, Luis, María y la alterada. Etiquetarlas. Guardar 2 vírgenes de repuesto.
-- [ ] Anotar el handle de cada una (lo muestra `scan`) en `docs/tarjetas-prueba.json`, si cambia.
+- [x] Ana Pérez: UID `A5:11:69:6A`, handle `DB3A215CECA2B951`, A1–A6, sellada.
+- [x] María López: UID `E3:91:BF:33`, handle `C5C288ACD5145568`, identidad, sangre y contacto, sellada.
+- [ ] Si se quiere mostrar una cédula revocada (`03`): revocar una de ellas desde el portal o con BLOQUEAR, o emitir una tercera. Hoy la de María está **activa**.
+- [ ] Limpieza opcional: Ana tiene en la base una cédula activa de más (`C12D5ADD4598A1E9`, primer intento sin tarjeta física); se puede revocar desde el panel del emisor.
+- [ ] Anotar los handles en `docs/tarjetas-prueba.json` si se usa ese archivo.
 
 ### 3.3 Decisiones abiertas (el equipo decide, después se implementa)
 
 | Tema | Hoy | Propuesta |
 |-|-|-|
-| **Código de vinculación** | Sin la Nextion, el código de 6 dígitos solo sale en la consola del gateway; el ciudadano no lo ve | Mostrarlo en el UNO: mensaje nuevo `{"t":"code","c":"123456"}` y una pantalla en el UNO (~30 líneas entre ESP32 y UNO). Importante si la demo incluye la billetera |
-| **Datos de emergencia** | Sangre, alergias y contacto salen solo en la consola; el UNO muestra "Acceso de emergencia" | Dejarlo así (el UNO "solo recibe códigos") o enviarlos al UNO. Si se envían, rompe la regla de privacidad del UNO: decidirlo a conciencia |
 | **Lectura desde un teléfono** | No implementada | Ver sección 3.4 |
 | **`scan` lee los datos de los atributos** | Muestra los valores en la consola | Para la demo, dejar solo UID y mapa de sectores, o no usarlo delante del jurado |
 
@@ -124,26 +118,23 @@ Si no hay tiempo, mejor sacarlo de la demo que mostrarlo a medias.
 - [ ] Historial del portal: un `06` por rechazo en WhatsApp debe leerse bien ("No compartiste…").
 - [ ] Opcional: mostrar en vivo, en el historial, la solicitud pendiente.
 - [ ] Verificador en modo avión valida el QR de Ana.
-- [ ] Billetera: vinculación con el código de 6 dígitos (depende de la decisión de la sección 3.3).
 
 ## 7. Checklist con hardware (todos, antes de la demo)
 
 Es el de `docs/09-pruebas.md`, ajustado al flujo nuevo. Se hace con el gateway y la API reales.
 
 - [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
-- [ ] `scan` lee el UID y el mapa de sectores de la cédula de Ana.
-- [ ] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado" y voz.
+- [x] `scan` lee el UID y el mapa de sectores de las cédulas de Ana y María.
+- [ ] Ana en el bar → "Esperando autorización" en el UNO → WhatsApp → **Sí** → "Aprobado".
 - [ ] Ana en el bar → WhatsApp → **No** → `06` en el UNO.
 - [ ] Ana no responde en 60 s → `06`.
-- [ ] Luis (menor) → denegado, sin pregunta, con WhatsApp a Luis.
-- [ ] María (revocada) → `03`, sin pregunta.
-- [ ] Tarjeta alterada → `02`.
+- [ ] María en el bar → `05`, sin pregunta, con WhatsApp a María.
+- [ ] Cédula revocada → `03`, sin pregunta.
 - [ ] Bar pidiendo salud → `05`.
 - [ ] Terminal de emergencia → lectura sin consentimiento y aviso.
 - [ ] Responder BLOQUEAR → el siguiente intento da `03`.
-- [ ] Abrir la carcasa → bloqueo, voz y alerta.
+- [ ] Abrir la carcasa → bloqueo, UNO en rojo y alerta por WhatsApp.
 - [ ] Verificador en modo avión valida el QR de Ana.
-- [ ] Vinculación de la billetera con el código.
 
 ## 8. Git y entrega
 
@@ -153,14 +144,14 @@ Es el de `docs/09-pruebas.md`, ajustado al flujo nuevo. Se hace con el gateway y
 
 ## 9. Documentación pendiente (koprolito y cada responsable)
 
+Ya actualizado (2026-10-25): el terminal sin Nextion, sin voz y sin código de vinculación en la demo; el gateway en Go; el consentimiento por WhatsApp después de leer, en `project-description.md`, `01`, `02`, `03`, `04`, `05`, `07`, `08` (cómo levantar el terminal, emitir una cédula y compilar el UNO) y `09`.
+
 | Archivo | Qué falta |
 |-|-|
-| `docs/05-arquitectura.md` | Dice "Gateway Node.js, serialport, SQLite": es **Go**, con cola en disco y audio |
-| `docs/08-despliegue-operacion.md` | En el runbook, "El terminal no lee: Aceptar tocado, tarjeta en < 10 s" ya no aplica. Cambiar por: "hora enviada por el gateway, tarjeta apoyada, `scan`". Agregar "No llega la pregunta de WhatsApp: escribir 'hola' al número de Kapso desde el teléfono de Ana (ventana de 24 h); plan B: `si`/`no` en el gateway" |
-| `docs/09-pruebas.md` | Reemplazar el checklist con hardware por el de la sección 7 |
-| `docs/04-flujos.md`, `03`, `02`, `07` | El consentimiento por WhatsApp (sección 7 de la guía de WhatsApp) |
-| `docs/roadmap.md`, `docs/contexto_del_proyecto.md` | Siguen nombrando la Nextion y el Arduino Mega. Son documentos históricos: marcarlos así al inicio, o quitarlos |
-| `README.md` | Cómo levantar el terminal: ESP32 + UNO + PIC + gateway, en 5 pasos |
+| `docs/contrato-terminal.md`, enlace 4 | `POST /api/consent` y `GET /api/consent/{id}`, cuando existan en la API |
+| `docs/09-pruebas.md` | Las pruebas del consentimiento en la API (sección 4.6 de la guía de WhatsApp) y sus resultados |
+| `docs/roadmap.md`, `docs/contexto_del_proyecto.md` | Siguen nombrando la Nextion, la voz y el Arduino Mega. Son documentos históricos: marcarlos así al inicio, o quitarlos |
+| `docs/diagramas/` y `docs/word/` | Regenerarlos con `python tools/docs/build_docs.py`: se hicieron antes de estos cambios |
 
 ## 10. El día de la demo
 

@@ -18,7 +18,7 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 | Atributo | Dato firmado: A1 mayor de 18, A2 mayor de 21, A3 identidad, A4 sangre y alergias, A5 contacto de emergencia, A6 donante y licencia |
 | Rol | Tipo de terminal: comercio, registro, salud, tránsito, emergencia |
 | Emisor | Autoridad que firma: 0x01 nacional, 0x02 universidad |
-| Gateway | Programa Node.js en la laptop que conecta el lector con la API |
+| Gateway | Programa en Go en la laptop que conecta el lector con la API |
 | Kapso | Plataforma de WhatsApp Business usada para avisos y webhook |
 | Códigos `res` | 01 aprobado · 02 firma inválida · 03 revocada · 04 vencida · 05 sin permiso · 06 rechazada por el ciudadano |
 
@@ -40,20 +40,20 @@ Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nu
 | RF-01 | El emisor podrá ordenar la emisión de una cédula a un ciudadano con perfil completo. |
 | RF-02 | El backend firmará cada atributo con `UID ‖ cabecera ‖ valor` y devolverá los bloques por sector. |
 | RF-03 | El terminal en modo emitir escribirá sectores, claves por rol y bits de acceso. |
-| RF-04 | El terminal en modo vincular enviará el handle y mostrará un código de 6 dígitos válido 2 minutos. |
+| RF-04 | El terminal en modo vincular enviará el handle y la API devolverá un código de 6 dígitos válido 2 minutos. Fuera de la demo: el terminal no tiene pantalla para mostrarlo. |
 | RF-05 | La billetera canjeará el código con su clave pública y recibirá credenciales derivadas (A1, A2, A6, carnet). |
 
 ### Verificación en terminal
 | ID | Requisito |
 |---|---|
-| RF-10 | El terminal mostrará lo que pide ("{local} pide: mayor de 18") y esperará consentimiento, salvo en modo emergencia. |
+| RF-10 | El terminal anunciará lo que pide ("{local} pide: mayor de 18") y leerá la cédula al acercarla. |
 | RF-11 | Al acercar la tarjeta, el firmware leerá el UID, el índice (handle) y **solo** el atributo pedido, autenticando con la clave A del rol. |
 | RF-12 | El firmware verificará la firma ECDSA del emisor sin internet, la vigencia (hora del gateway) y que el handle no esté revocado. |
 | RF-13 | El firmware producirá un código `res` (01–06) y emitirá un evento `verif` con handle, atributo, resultado, hora y marca de emergencia. |
-| RF-14 | El terminal responderá con voz y en la pantalla del comercio, que solo recibe códigos. |
+| RF-14 | El terminal mostrará el resultado en la pantalla del comercio, que solo recibe códigos. |
 | RF-15 | Un rol sin la clave de un sector obtendrá `05` y no podrá leer el dato. |
 | RF-16 | El rol emergencia leerá sangre y contacto sin consentimiento y marcará el evento `emg = true`. |
-| RF-17 | El rechazo del ciudadano en la pantalla producirá `06`. Se registra como evento y se avisa solo si ya hay una cédula identificada (en el flujo normal el rechazo ocurre antes de acercarla y no hay handle). |
+| RF-17 | Un resultado `01` no se mostrará ni se registrará hasta que el ciudadano lo autorice por WhatsApp. Si lo rechaza o no responde en 60 s, el resultado será `06`, que se registra con el handle de la cédula y se avisa. Los resultados `02`–`05` se muestran sin preguntar. |
 
 ### Registro y avisos
 | ID | Requisito |

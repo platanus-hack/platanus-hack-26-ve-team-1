@@ -9,14 +9,12 @@ flowchart TB
   Emisor([Emisor])
   SLJ[["sIsA<br/>(cédula, terminal, PWA, nube)"]]
   Kapso[(Kapso<br/>WhatsApp)]
-  ElevenLabs[(ElevenLabs<br/>audios pregenerados)]
 
   Ciudadano -->|cédula NFC, portal, billetera| SLJ
   Comercio -->|terminal, verificador| SLJ
   Emisor -->|panel /emisor| SLJ
   SLJ -->|avisos| Kapso
   Kapso -->|webhook BLOQUEAR| SLJ
-  ElevenLabs -. audios generados una vez .-> SLJ
 ```
 
 ## Nivel 2 · Contenedores
@@ -32,7 +30,7 @@ flowchart LR
     FW -->|serial 9600, solo códigos| UNO
     FW <-->|HB / BLOQ| PIC
   end
-  GW[Gateway Node.js<br/>cola SQLite + audio]
+  GW[Gateway Go<br/>cola de eventos en disco]
   FW <-->|USB serial JSON| GW
   subgraph Render
     Web[Static Site slj-web<br/>React + Vite + PWA]
@@ -52,7 +50,7 @@ flowchart LR
 | Firmware del lector | C++ / PlatformIO, MFRC522, micro-ecc, ArduinoJson | `firmware/esp32`, `firmware/rc522-diag` |
 | Guardián | PIC16F13145, MPLAB X, CLB | `firmware/pic` |
 | Pantalla del comercio | Arduino UNO + MCUFRIEND_kbv | `firmware/uno` |
-| Gateway | Node.js 20, serialport, SQLite | `gateway/` |
+| Gateway | Go, go.bug.st/serial, cola de eventos en archivos | `gateway/` |
 | API | Go (chi, pgx), JWT, bcrypt | `api/` |
 | Base de datos | Postgres (migraciones SQL) | `db/migrations` |
 | Front y PWAs | React, TypeScript, Vite, Tailwind, WebCrypto, IndexedDB | `web/` (núcleo QR en `web/src/lib/slj`) |

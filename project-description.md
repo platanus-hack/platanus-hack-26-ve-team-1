@@ -13,17 +13,17 @@ Un prototipo de cédula electrónica que **guarda más datos pero muestra menos*
 ## Cinco piezas
 
 1. **La cédula:** tarjeta NFC MIFARE 1K con atributos firmados (ECDSA P-256) y sectores protegidos por rol.
-2. **El terminal:** ESP32 + lector RC522, pantalla del comercio (UNO) que solo recibe códigos y voz en español. Verifica la firma **sin internet**.
+2. **El terminal:** ESP32 + lector RC522, pantalla del comercio (UNO) que solo recibe códigos. Verifica la firma **sin internet**.
 3. **El guardián:** un PIC bloquea el lector por hardware si abren la carcasa o el firmware deja de latir.
 4. **La billetera y el verificador:** PWA instalables; QR dinámico firmado por el celular, verificable sin red.
 5. **La nube:** API en Go y Postgres en Render, historial en vivo, paneles del emisor y el comercio, y avisos por WhatsApp con Kapso.
 
 ## Flujo principal
 
-1. El terminal muestra qué dato pide y el ciudadano acepta.
-2. Acerca la cédula: el firmware lee el índice (handle) y **solo el atributo pedido**.
+1. El terminal anuncia qué dato pide y el ciudadano acerca la cédula.
+2. El firmware lee el índice (handle) y **solo el atributo pedido**.
 3. Verifica firma del emisor, vigencia, revocación y permiso del rol; resultado 01 aprobado, 02 firma inválida, 03 revocada, 04 vencida, 05 sin permiso, 06 rechazada.
-4. Responde con voz y pantallas, y envía el evento a la nube.
+4. Si el resultado es 01, el dato no se entrega hasta que el ciudadano lo autoriza por WhatsApp; sin respuesta en 60 s queda 06. La pantalla del comercio muestra el resultado y el evento va a la nube.
 5. La API avisa por **WhatsApp (Kapso) tanto si el acceso se autorizó como si se denegó**, con el motivo y un botón **Bloquear cédula**. Responder BLOQUEAR revoca la cédula al instante.
 
 ## Privacidad por diseño
@@ -39,7 +39,7 @@ Un prototipo de cédula electrónica que **guarda más datos pero muestra menos*
 |---|---|
 | Firmware | ESP32, PlatformIO, MFRC522, micro-ecc, ArduinoJson |
 | Guardián | PIC16F13145, MPLAB X, CLB |
-| Gateway | Node.js (serial, cola SQLite, audio) |
+| Gateway | Go (puerto serie, cola de eventos en disco) |
 | API | Go, chi, pgx, JWT, bcrypt, Server-Sent Events |
 | Base de datos | Postgres con migraciones SQL |
 | Front y PWAs | React, TypeScript, Vite, Tailwind, WebCrypto, IndexedDB |

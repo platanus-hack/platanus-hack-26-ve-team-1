@@ -5,7 +5,7 @@
 1. **Sabe más, muestra menos:** el chip guarda varios atributos, pero cada terminal solo puede abrir los sectores de su rol y solo pide uno.
 2. **Minimización:** el comercio recibe un código de resultado, nunca datos personales; los eventos usan un handle seudónimo.
 3. **Transparencia hacia el ciudadano:** cada lectura, aprobada o denegada, llega por WhatsApp y al historial.
-4. **Control del ciudadano:** consentimiento antes de compartir cada dato (salvo emergencia, que siempre notifica), bloqueo con un toque.
+4. **Control del ciudadano:** consentimiento por WhatsApp antes de entregar cada dato (salvo emergencia, que siempre notifica), bloqueo con un toque. El lector lee y verifica la cédula antes de preguntar, pero no muestra ni registra un `01` hasta tener la respuesta; sin respuesta en 60 s, `06`.
 
 ## Control de acceso por sector
 

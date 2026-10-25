@@ -48,17 +48,19 @@ Los casos 1–12 están automatizados en `notify_test.go` y `kapso_integration_t
 
 ## Checklist con hardware (lo ejecuta el equipo)
 
-- [ ] ESP32 grabado, REARME del PIC, `[PIC] BLOQ en BAJO`.
-- [ ] `scan` lee UID y mapa de sectores de la cédula de Ana.
-- [ ] Gateway conectado, hora enviada, Aceptar, cédula de Ana → "acceso concedido" y WhatsApp real.
-- [ ] Cédula de Luis (menor) → denegado y WhatsApp a Luis.
-- [ ] Cédula de María (revocada) → `03` y WhatsApp sin botón.
+- [x] Cédulas de demo emitidas en Render: Ana (`DB3A215CECA2B951`, A1–A6) y María (`C5C288ACD5145568`, sin A1/A2 por ser menor).
+- [x] `scan` lee UID y mapa de sectores de las dos cédulas.
+- [x] Consentimiento simulado en placa (`a`/`r`): `01` → "Esperando autorización" en el UNO → verde o rojo.
+- [ ] ESP32 cargado, REARME del PIC, sin `tamper` al arrancar.
+- [ ] Ana en el bar → "Esperando autorización" → WhatsApp → **Sí** → aprobado en el UNO.
+- [ ] Ana en el bar → WhatsApp → **No** → `06`; sin respuesta en 60 s → `06`.
+- [ ] María en el bar → `05` (su cédula no tiene el dato "Mayor de 18").
+- [ ] Cédula revocada → `03` y WhatsApp sin botón.
 - [ ] Tarjeta alterada → `02` y WhatsApp.
 - [ ] Bar con atributo de salud → `05`.
-- [ ] Rechazar la solicitud (`consent` con `approved:false`) → `06` en el UNO; sin WhatsApp (no hay handle antes de acercar la cédula).
 - [ ] Terminal de emergencia → lectura sin consentimiento y aviso.
 - [ ] Responder BLOQUEAR → siguiente intento da `03`.
-- [ ] Abrir la carcasa → bloqueo, voz y alerta.
+- [ ] Abrir la carcasa → bloqueo, UNO en rojo y alerta.
 - [ ] Verificador en modo avión valida el QR de Ana.
 
 ## Resultados

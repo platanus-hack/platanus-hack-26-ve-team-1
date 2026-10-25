@@ -6,29 +6,30 @@
 
 ```mermaid
 flowchart TD
-  A([Terminal en espera]) --> B["Muestra: '{local} pide: {dato}'"]
-  B --> C{¿Ciudadano acepta?<br/>solo si el modo no es emergencia}
-  C -- No --> R6[res 06 · Rechazado]
-  C -- Sí --> D[Acerca la cédula<br/>< 10 s]
+  A([Terminal en espera]) --> B["Anuncia: '{local} pide: {dato}'"]
+  B --> D[El ciudadano acerca la cédula]
   D --> E[Lee UID e índice: handle]
   E --> F{¿Hay índice válido?}
-  F -- No --> X[Sin cédula: no hay evento<br/>por falta de handle]
-  F -- Sí --> G{¿Handle en lista<br/>de revocación?}
-  G -- Sí --> R3[res 03 · Revocada]
-  G -- No --> H{¿Clave del rol abre<br/>los sectores del dato?}
+  F -- No --> X[No es una cédula:<br/>no hay evento]
+  F -- Sí --> H{¿Clave del rol abre<br/>los sectores del dato?}
   H -- No --> R5[res 05 · Sin permiso]
   H -- Sí --> I[Lee registro del atributo]
   I --> J{¿Firma ECDSA válida<br/>con UID + campos?}
   J -- No --> R2[res 02 · Firma inválida]
-  J -- Sí --> K{¿Vigente con la hora<br/>del gateway?}
+  J -- Sí --> G{¿Handle en lista<br/>de revocación?}
+  G -- Sí --> R3[res 03 · Revocada]
+  G -- No --> K{¿Vigente con la hora<br/>del gateway?}
   K -- No --> R4[res 04 · Vencida]
-  K -- Sí --> R1[res 01 · Aprobado]
-  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + pantalla comercio<br/>solo con códigos]
+  K -- Sí --> W[Pantalla comercio:<br/>Esperando autorización]
+  W --> C{¿El ciudadano autoriza<br/>por WhatsApp en 60 s?<br/>emergencia no pregunta}
+  C -- Sí --> R1[res 01 · Aprobado]
+  C -- No o sin respuesta --> R6[res 06 · Rechazado]
+  R1 & R2 & R3 & R4 & R5 & R6 --> S[Pantalla comercio<br/>solo con códigos]
   S --> T[Evento verif → gateway → POST /api/events]
   T --> U([Aviso WhatsApp, ver secuencia])
 ```
 
-> Limitación actual del `06`: en el flujo normal el ciudadano rechaza **antes** de acercar la cédula, así que el firmware no conoce el handle y (`enviarRechazo` en `firmware/esp32/src/main.cpp`) no envía el evento; por tanto no hay WhatsApp para ese rechazo. Solo se envía `verif` con `06` si ya había una cédula identificada. Los resultados 01–05 siempre llevan handle (el del registro si su firma se verificó; si no, el del índice).
+> Un `01` no se muestra ni se informa hasta que el ciudadano responde: el lector envía `pedido` al gateway, la API pregunta por WhatsApp y la respuesta vuelve como `consent` (detalle en [consentimiento-whatsapp.md](consentimiento-whatsapp.md)). Los resultados `02`–`05` se muestran sin preguntar. Todos los resultados, también el `06`, llevan handle: el del registro si su firma se verificó; si no, el del índice.
 
 ### Diagrama de secuencia (terminal → WhatsApp)
 
@@ -37,7 +38,7 @@ sequenceDiagram
   autonumber
   actor Ana as Ciudadano
   participant FW as Terminal (ESP32 + RC522)
-  participant GW as Gateway (Node)
+  participant GW as Gateway (Go)
   participant API as API Go (Render)
   participant DB as Postgres
   participant K as Kapso
@@ -45,9 +46,10 @@ sequenceDiagram
 
   Ana->>FW: Acerca la cédula
   FW->>FW: Lee handle, abre sectores con la clave del rol,<br/>verifica firma, vigencia y revocación
-  FW-->>Ana: Voz y pantalla: concedido o denegado
+  Note over FW,WA: Si el resultado es 01, antes se pide la autorización por WhatsApp (consentimiento-whatsapp.md)
+  FW-->>Ana: Pantalla del comercio: concedido o denegado
   FW->>GW: {"t":"verif","h":"…","a":"A1","res":"01|02..06","ts":…}
-  GW->>GW: Cola local (SQLite)
+  GW->>GW: Cola local en disco
   GW->>API: POST /api/events (Bearer token del terminal)
   API->>DB: INSERT events y NOTIFY slj_events
   API-->>GW: {"ok":true}
@@ -70,7 +72,7 @@ sequenceDiagram
 | 03 | Cédula revocada | "se negó el acceso… tu cédula está bloqueada" | No |
 | 04 | Vencida | "se negó el acceso… tu cédula está vencida" | Sí |
 | 05 | Sin permiso | "{local} pidió '{dato}'… no se compartió nada" | Sí |
-| 06 | Rechazada por el ciudadano | "se canceló el acceso… no aceptaste compartir" | Sí |
+| 06 | Rechazada o sin respuesta del ciudadano | "se canceló el acceso… no aceptaste compartir" | Sí |
 
 ## 2. Emisión de una cédula
 
@@ -98,6 +100,8 @@ sequenceDiagram
 ```
 
 ## 3. Vinculación de la billetera
+
+> Fuera de la demo: el terminal no tiene pantalla para mostrar el código de 6 dígitos.
 
 ```mermaid
 sequenceDiagram
@@ -152,5 +156,5 @@ sequenceDiagram
   PIC->>FW: BLOQ en ALTO + corta alimentación del lector
   FW->>API: {"t":"tamper"} (vía gateway)
   API->>K: «Alerta: el terminal X detectó manipulación»
-  Note over FW: Voz «terminal bloqueado», REARME con precinto cerrado
+  Note over FW: Pantalla del comercio «Terminal bloqueado», REARME con precinto cerrado
 ```

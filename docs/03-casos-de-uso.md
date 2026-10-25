@@ -49,14 +49,14 @@ flowchart LR
 - **Actores:** ciudadano, terminal (comercio/registro/salud/tránsito).
 - **Precondición:** terminal configurado con rol y atributo; cédula emitida; el gateway envió la hora.
 - **Flujo principal:**
-  1. La pantalla muestra "{local} pide: {dato}". El ciudadano toca **Aceptar**.
-  2. Acerca la cédula. El firmware lee UID e índice (handle).
-  3. Se autentica en los sectores del atributo con la clave del rol y lee el registro.
-  4. Verifica firma del emisor, vigencia y que el handle no esté revocado.
-  5. Resultado `01`: voz "acceso concedido", pantalla del comercio con el visto bueno.
+  1. El terminal anuncia "{local} pide: {dato}". El ciudadano acerca la cédula y el firmware lee UID e índice (handle).
+  2. Se autentica en los sectores del atributo con la clave del rol y lee el registro.
+  3. Verifica firma del emisor, vigencia y que el handle no esté revocado.
+  4. Resultado `01`: la pantalla del comercio muestra "Esperando autorización" y el ciudadano recibe por WhatsApp "{local} pide '{dato}'. ¿Lo compartes?".
+  5. El ciudadano toca **Sí**: la pantalla del comercio muestra el visto bueno.
   6. Se envía el evento `verif` a la API (vía gateway) → CU-02.
 - **Flujos alternos:**
-  - A1 (`06`): el ciudadano rechaza; no se lee nada. Como aún no se identificó la cédula, no hay handle y no se envía evento ni aviso (limitación actual).
+  - A1 (`06`): el ciudadano toca **No** o no responde en 60 s; no se entrega el dato y se registra `06` con el handle.
   - A2 (`05`): el rol no tiene la clave del sector; no se lee el dato.
   - A3 (`02`): la firma no coincide (tarjeta alterada o copiada).
   - A4 (`03`): el handle está en la lista de revocación.
@@ -81,6 +81,7 @@ flowchart LR
 
 ### CU-05 · Vincular la billetera
 - **Flujo:** el ciudadano toca la cédula en un terminal en modo vincular → la API devuelve un código de 6 dígitos (2 min) → en `/billetera` lo escribe junto a la clave pública del celular → la API emite credenciales derivadas.
+- **Estado:** fuera de la demo. El terminal no tiene pantalla para mostrar el código; el gateway solo lo escribe en su consola.
 
 ### CU-06 · Presentar un QR
 - El ciudadano elige una credencial; la billetera muestra `SLJ1:` firmado por el celular y regenerado periódicamente.

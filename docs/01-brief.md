@@ -22,7 +22,7 @@
 ## Solución en cinco piezas
 
 1. **La cédula** (tarjeta NFC MIFARE 1K): atributos firmados con ECDSA P-256; cada grupo de sectores se abre con una clave distinta según el rol del terminal.
-2. **El terminal** (ESP32 + lector RC522 y pantalla del comercio con UNO): verifica la firma sin internet, pide consentimiento al ciudadano y responde con voz y en la pantalla del comercio.
+2. **El terminal** (ESP32 + lector RC522 y pantalla del comercio con UNO): verifica la firma sin internet y muestra el resultado en la pantalla del comercio; un dato aprobado solo se entrega cuando el ciudadano lo autoriza por WhatsApp.
 3. **El guardián** (PIC16F13145): bloquea el lector por hardware si abren la carcasa o el firmware deja de latir.
 4. **La billetera y el verificador** (PWA): credenciales derivadas con QR dinámico firmado por el celular; verificación sin red.
 5. **La nube** (API en Go + Postgres en Render + Kapso): emisión, vinculación, historial en vivo, avisos por WhatsApp y bloqueo respondiendo BLOQUEAR.
@@ -33,7 +33,7 @@ Una persona acerca su cédula al terminal → el firmware lee el índice (handle
 
 ## Alcance
 
-**Incluido (prototipo):** emisión simulada, terminal con 4 modos (verificar, emergencia, emitir, vincular), billetera y verificador PWA, portal ciudadano, paneles de emisor y comercio, avisos y webhook de Kapso, guardián PIC, carnet universitario, datos de demo.
+**Incluido (prototipo):** emisión simulada, terminal con los modos verificar, emergencia y emitir (el modo vincular existe en el firmware, pero no se usa en la demo), billetera y verificador PWA, portal ciudadano, paneles de emisor y comercio, avisos y webhook de Kapso, guardián PIC, carnet universitario, datos de demo.
 
 **Fuera de alcance (hoja de ruta):** chip seguro real con autenticación activa, biometría y foto, historial cifrado de extremo a extremo, firmas no vinculables, estándares internacionales, terminales certificados.
 
