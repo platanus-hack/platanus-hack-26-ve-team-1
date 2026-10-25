@@ -7,9 +7,9 @@ flowchart TB
   Ciudadano([Ciudadano])
   Comercio([Comercio / Salud])
   Emisor([Emisor])
-  SLJ[["SoloLoJusto\n(cédula, terminal, PWA, nube)"]]
-  Kapso[(Kapso\nWhatsApp)]
-  ElevenLabs[(ElevenLabs\naudios pregenerados)]
+  SLJ[["sIsA<br/>(cédula, terminal, PWA, nube)"]]
+  Kapso[(Kapso<br/>WhatsApp)]
+  ElevenLabs[(ElevenLabs<br/>audios pregenerados)]
 
   Ciudadano -->|cédula NFC, portal, billetera| SLJ
   Comercio -->|terminal, verificador| SLJ
@@ -25,28 +25,28 @@ flowchart TB
 flowchart LR
   subgraph Campo[Terminal físico]
     Card[Tarjeta MIFARE 1K]
-    FW[ESP32 + RC522\nfirmware PlatformIO]
-    Nex[Nextion\nciudadano]
-    UNO[UNO + ILI9488\ncomercio]
-    PIC[PIC16F13145\nguardián]
+    FW[ESP32 + RC522<br/>firmware PlatformIO]
+    Nex[Nextion<br/>ciudadano]
+    UNO[UNO + ILI9488<br/>comercio]
+    PIC[PIC16F13145<br/>guardián]
     Card <-->|NFC 13,56 MHz| FW
     FW -->|UART| Nex
     FW -->|serial 9600, solo códigos| UNO
     FW <-->|HB / BLOQ| PIC
   end
-  GW[Gateway Node.js\ncola SQLite + audio]
+  GW[Gateway Node.js<br/>cola SQLite + audio]
   FW <-->|USB serial JSON| GW
   subgraph Render
-    Web[Static Site slj-web\nReact + Vite + PWA]
-    API[Web Service slj-api\nGo + chi]
+    Web[Static Site slj-web<br/>React + Vite + PWA]
+    API[Web Service slj-api<br/>Go + chi]
     DB[(Postgres)]
     Web -->|rewrite /api/*| API
     API --> DB
   end
   GW -->|HTTPS Bearer| API
   API <-->|REST + webhook HMAC| K[(Kapso)]
-  Phone[Celular\nPWA billetera] --> Web
-  Verif[Celular comercio\nPWA verificador] --> Web
+  Phone[Celular<br/>PWA billetera] --> Web
+  Verif[Celular comercio<br/>PWA verificador] --> Web
 ```
 
 | Contenedor | Tecnología | Ubicación en el repo |
@@ -66,15 +66,15 @@ flowchart LR
 flowchart TB
   subgraph slj-api
     R[chi Router + CORS + sesión + roles]
-    TA[terminal.Auth\nBearer → SHA-256]
-    AUTH[auth.go\nregistro / login / JWT]
-    EV[events.go\nverif y tamper]
-    NO[notify.go\nuseMessage + Notifier]
-    HUB[history.go\nSSE + LISTEN/NOTIFY]
-    EM[emision.go / cards.go\nfirma y bloques]
-    LK[link.go\ncódigos de 6 dígitos]
-    SG[internal/sign\nECDSA P-256 crudo]
-    KP[internal/kapso\ncliente + webhook]
+    TA[terminal.Auth<br/>Bearer → SHA-256]
+    AUTH[auth.go<br/>registro / login / JWT]
+    EV[events.go<br/>verif y tamper]
+    NO[notify.go<br/>useMessage + Notifier]
+    HUB[history.go<br/>SSE + LISTEN/NOTIFY]
+    EM[emision.go / cards.go<br/>firma y bloques]
+    LK[link.go<br/>códigos de 6 dígitos]
+    SG[internal/sign<br/>ECDSA P-256 crudo]
+    KP[internal/kapso<br/>cliente + webhook]
   end
   R --> AUTH & HUB & EM & LK
   R --> TA --> EV

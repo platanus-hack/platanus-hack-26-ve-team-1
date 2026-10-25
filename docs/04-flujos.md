@@ -6,24 +6,24 @@
 
 ```mermaid
 flowchart TD
-  A([Terminal en espera]) --> B[Muestra: '{local} pide: {dato}']
-  B --> C{¿Ciudadano acepta?\nsolo si el modo no es emergencia}
+  A([Terminal en espera]) --> B["Muestra: '{local} pide: {dato}'"]
+  B --> C{¿Ciudadano acepta?<br/>solo si el modo no es emergencia}
   C -- No --> R6[res 06 · Rechazado]
-  C -- Sí --> D[Acerca la cédula\n< 10 s]
+  C -- Sí --> D[Acerca la cédula<br/>< 10 s]
   D --> E[Lee UID e índice: handle]
   E --> F{¿Hay índice válido?}
-  F -- No --> X[Sin cédula: no hay evento\npor falta de handle]
-  F -- Sí --> G{¿Handle en lista\nde revocación?}
+  F -- No --> X[Sin cédula: no hay evento<br/>por falta de handle]
+  F -- Sí --> G{¿Handle en lista<br/>de revocación?}
   G -- Sí --> R3[res 03 · Revocada]
-  G -- No --> H{¿Clave del rol abre\nlos sectores del dato?}
+  G -- No --> H{¿Clave del rol abre<br/>los sectores del dato?}
   H -- No --> R5[res 05 · Sin permiso]
   H -- Sí --> I[Lee registro del atributo]
-  I --> J{¿Firma ECDSA válida\ncon UID + campos?}
+  I --> J{¿Firma ECDSA válida<br/>con UID + campos?}
   J -- No --> R2[res 02 · Firma inválida]
-  J -- Sí --> K{¿Vigente con la hora\ndel gateway?}
+  J -- Sí --> K{¿Vigente con la hora<br/>del gateway?}
   K -- No --> R4[res 04 · Vencida]
   K -- Sí --> R1[res 01 · Aprobado]
-  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + Nextion + pantalla comercio\nsolo con códigos]
+  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + Nextion + pantalla comercio<br/>solo con códigos]
   S --> T[Evento verif → gateway → POST /api/events]
   T --> U([Aviso WhatsApp, ver secuencia])
 ```
@@ -44,12 +44,12 @@ sequenceDiagram
   participant WA as WhatsApp de Ana
 
   Ana->>FW: Acerca la cédula
-  FW->>FW: Lee handle, abre sectores con la clave del rol,\nverifica firma, vigencia y revocación
+  FW->>FW: Lee handle, abre sectores con la clave del rol,<br/>verifica firma, vigencia y revocación
   FW-->>Ana: Voz y pantalla: concedido o denegado
   FW->>GW: {"t":"verif","h":"…","a":"A1","res":"01|02..06","ts":…}
   GW->>GW: Cola local (SQLite)
   GW->>API: POST /api/events (Bearer token del terminal)
-  API->>DB: INSERT events; NOTIFY slj_events
+  API->>DB: INSERT events y NOTIFY slj_events
   API-->>GW: {"ok":true}
   API->>DB: Dueño del handle: nombre y teléfono si avisos activos
   API->>K: POST /messages (texto o botones según res)
@@ -118,13 +118,13 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  W[Billetera] -->|firma hora ‖ atributo\ncon clave no extraíble| Q["QR SLJ1:…\n(regenera cada ≤30 s)"]
+  W[Billetera] -->|firma hora ‖ atributo<br/>con clave no extraíble| Q["QR SLJ1:…<br/>(regenera cada ≤30 s)"]
   Q --> V[Verificador PWA]
-  V --> V1{Firma del emisor\nválida?}
+  V --> V1{Firma del emisor<br/>válida?}
   V1 -- No --> N[Rechazado]
-  V1 -- Sí --> V2{Firma del celular\ny hora ±30 s?}
+  V1 -- Sí --> V2{Firma del celular<br/>y hora ±30 s?}
   V2 -- No --> N
-  V2 -- Sí --> V3{Handle no está en\nrevocaciones locales?}
+  V2 -- Sí --> V3{Handle no está en<br/>revocaciones locales?}
   V3 -- No --> N
   V3 -- Sí --> OK["Mayor de 18: SÍ"]
   OK -. con red .-> API[(POST /api/events)]
@@ -152,5 +152,5 @@ sequenceDiagram
   PIC->>FW: BLOQ en ALTO + corta alimentación del lector
   FW->>API: {"t":"tamper"} (vía gateway)
   API->>K: «Alerta: el terminal X detectó manipulación»
-  Note over FW: Voz «terminal bloqueado»; REARME con precinto cerrado
+  Note over FW: Voz «terminal bloqueado», REARME con precinto cerrado
 ```

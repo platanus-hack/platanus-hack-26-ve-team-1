@@ -1,0 +1,21 @@
+flowchart TD
+  A([Terminal en espera]) --> B["Muestra: '{local} pide: {dato}'"]
+  B --> C{¿Ciudadano acepta?<br/>solo si el modo no es emergencia}
+  C -- No --> R6[res 06 · Rechazado]
+  C -- Sí --> D[Acerca la cédula<br/>< 10 s]
+  D --> E[Lee UID e índice: handle]
+  E --> F{¿Hay índice válido?}
+  F -- No --> X[Sin cédula: no hay evento<br/>por falta de handle]
+  F -- Sí --> G{¿Handle en lista<br/>de revocación?}
+  G -- Sí --> R3[res 03 · Revocada]
+  G -- No --> H{¿Clave del rol abre<br/>los sectores del dato?}
+  H -- No --> R5[res 05 · Sin permiso]
+  H -- Sí --> I[Lee registro del atributo]
+  I --> J{¿Firma ECDSA válida<br/>con UID + campos?}
+  J -- No --> R2[res 02 · Firma inválida]
+  J -- Sí --> K{¿Vigente con la hora<br/>del gateway?}
+  K -- No --> R4[res 04 · Vencida]
+  K -- Sí --> R1[res 01 · Aprobado]
+  R1 & R2 & R3 & R4 & R5 & R6 --> S[Voz + Nextion + pantalla comercio<br/>solo con códigos]
+  S --> T[Evento verif → gateway → POST /api/events]
+  T --> U([Aviso WhatsApp, ver secuencia])

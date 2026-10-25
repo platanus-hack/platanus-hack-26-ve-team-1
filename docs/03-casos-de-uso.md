@@ -13,20 +13,20 @@ flowchart LR
   Kapso([Kapso / WhatsApp])
   PIC([Guardián PIC])
 
-  subgraph Sistema[SoloLoJusto]
-    CU01((CU-01 Verificar dato\ncon la cédula))
-    CU02((CU-02 Notificar uso\naprobado o denegado))
-    CU03((CU-03 Leer datos\nen emergencia))
+  subgraph Sistema[sIsA]
+    CU01((CU-01 Verificar dato<br/>con la cédula))
+    CU02((CU-02 Notificar uso<br/>aprobado o denegado))
+    CU03((CU-03 Leer datos<br/>en emergencia))
     CU04((CU-04 Emitir cédula))
     CU05((CU-05 Vincular billetera))
     CU06((CU-06 Presentar QR))
-    CU07((CU-07 Verificar QR\nsin red))
-    CU08((CU-08 Bloquear cédula\npor WhatsApp))
-    CU09((CU-09 Ver historial\ny gestionar datos))
-    CU10((CU-10 Revocar /\nreactivar))
-    CU11((CU-11 Gestionar\nterminales))
-    CU12((CU-12 Emitir carnet\nuniversitario))
-    CU13((CU-13 Detectar\nmanipulación))
+    CU07((CU-07 Verificar QR<br/>sin red))
+    CU08((CU-08 Bloquear cédula<br/>por WhatsApp))
+    CU09((CU-09 Ver historial<br/>y gestionar datos))
+    CU10((CU-10 Revocar /<br/>reactivar))
+    CU11((CU-11 Gestionar<br/>terminales))
+    CU12((CU-12 Emitir carnet<br/>universitario))
+    CU13((CU-13 Detectar<br/>manipulación))
   end
 
   Ciudadano --- CU01 & CU05 & CU06 & CU08 & CU09 & CU10

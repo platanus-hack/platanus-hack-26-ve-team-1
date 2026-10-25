@@ -1,0 +1,26 @@
+sequenceDiagram
+  autonumber
+  actor Ana as Ciudadano
+  participant FW as Terminal (ESP32 + RC522)
+  participant GW as Gateway (Node)
+  participant API as API Go (Render)
+  participant DB as Postgres
+  participant K as Kapso
+  participant WA as WhatsApp de Ana
+
+  Ana->>FW: Acerca la cédula
+  FW->>FW: Lee handle, abre sectores con la clave del rol,<br/>verifica firma, vigencia y revocación
+  FW-->>Ana: Voz y pantalla: concedido o denegado
+  FW->>GW: {"t":"verif","h":"…","a":"A1","res":"01|02..06","ts":…}
+  GW->>GW: Cola local (SQLite)
+  GW->>API: POST /api/events (Bearer token del terminal)
+  API->>DB: INSERT events y NOTIFY slj_events
+  API-->>GW: {"ok":true}
+  API->>DB: Dueño del handle: nombre y teléfono si avisos activos
+  API->>K: POST /messages (texto o botones según res)
+  K->>WA: "Hola Ana: se autorizó/negó el acceso en …"
+  Ana->>WA: (opcional) Toca «Bloquear cédula»
+  WA->>K: Respuesta
+  K->>API: POST /api/webhooks/kapso (HMAC)
+  API->>DB: Revoca cédulas, borra credenciales de billetera
+  API->>K: "Tu cédula fue bloqueada…"

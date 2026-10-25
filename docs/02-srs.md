@@ -5,7 +5,7 @@ Basada en IEEE 830, adaptada al alcance del prototipo.
 ## 1. Introducción
 
 ### 1.1 Propósito
-Definir los requisitos del sistema SoloLoJusto para desarrolladores, probadores y jurado.
+Definir los requisitos del sistema sIsA para desarrolladores, probadores y jurado.
 
 ### 1.2 Alcance
 Sistema de cédula electrónica con terminal NFC, billetera/verificador PWA y nube (API, base de datos, WhatsApp). No incluye el chip seguro real ni integración con sistemas oficiales.
