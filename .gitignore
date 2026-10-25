@@ -23,6 +23,8 @@ gateway/*.sqlite
 gateway/*.sqlite-journal
 gateway/*.db
 gateway/logs/
+gateway/data/
+gateway/*.exe
 
 # De platformio, la plataforma donde programo los microcontroladores no PIC
 .pio/
